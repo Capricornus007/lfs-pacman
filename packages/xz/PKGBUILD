@@ -1,33 +1,47 @@
+# MLFS 8.8 Xz-5.8.4 —— §8.8（multilib：lib + lib32）；轉換規則見手冊 §7.4
 pkgname=xz
-pkgver=5.2.3
+pkgver=5.8.4
 pkgrel=1
-pkgdesc="Library and command line tools for XZ and LZMA compressed files"
+pkgdesc="XZ/LZMA 壓縮庫與工具（MLFS multilib：lib + lib32）"
 arch=('x86_64')
-url="http://tukaani.org/xz/"
-license=('custom' 'gpl' 'LGPL')
+url="https://tukaani.org/xz/"
+license=('0BSD' 'GPL-2.0-or-later' 'GPL-3.0-or-later' 'LGPL-2.1-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄：Glibc
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('8b2f092ad33e560bc04ffdbe3101daa7')
+
+prepare() {
+    cp -a ${pkgname}-${pkgver} build32
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.8.1
     ./configure --prefix=/usr    \
-		--disable-static \
-		--docdir=/usr/share/doc/xz-${pkgver}
+                --disable-static \
+                --docdir=/usr/share/doc/xz-5.8.4
+    make
+    cd ../build32
+    # 書 8.8.2：CC="gcc -m32" --host=i686-pc-linux-gnu --libdir=/usr/lib32 --disable-static
+    CC="gcc -m32" ./configure         \
+        --host=i686-pc-linux-gnu      \
+        --prefix=/usr                 \
+        --libdir=/usr/lib32           \
+        --disable-static
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    # 書 8.8.1：make check（64 位）
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/bin
-    install -vdm755 ${pkgdir}/lib
-    install -vdm755 ${pkgdir}/usr/lib
-    mv -v ${pkgdir}/usr/bin/{lzma,unlzma,lzcat,xz,unxz,xzcat} ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/lib/liblzma.so.* ${pkgdir}/lib
-    ln -svf ../../lib/$(readlink ${pkgdir}/usr/lib/liblzma.so) ${pkgdir}/usr/lib/liblzma.so
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
+    # 書 8.8.2：make DESTDIR=$PWD/DESTDIR install → cp DESTDIR/usr/lib32/* /usr/lib32
+    cd ../build32
+    make DESTDIR="${pkgdir}" install
 }

@@ -1,18 +1,20 @@
+# MLFS 8.4 Iana-Etc-20261015 —— §8.4；轉換規則見手冊 §7.4
 pkgname=iana-etc
-pkgver=2.30
+pkgver=20261015
 pkgrel=1
-pkgdesc="/etc/protocols and /etc/services provided by IANA"
-arch=('x86_64')
-url="http://www.iana.org/protocols"
-license=('custom:none')
-source=(${pkgname}-${pkgver}.tar.bz2)
-
-build() {
-    cd "${pkgname}-${pkgver}"
-    make
-}
+pkgdesc="IANA 的 /etc/services 與 /etc/protocols 數據"
+arch=('any')
+url="https://github.com/Mic92/iana-etc"
+license=('custom:IANA')
+options=(!strip !debug !lto)
+# 書 8.4 無構建依賴
+depends=()
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('ce2bd3902a91499ab38d4dda06be5be7')
 
 package() {
     cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    # 書 8.4：cp -v services protocols /etc → DESTDIR 化為 install -D
+    install -Dm644 services "${pkgdir}/etc/services"
+    install -Dm644 protocols "${pkgdir}/etc/protocols"
 }

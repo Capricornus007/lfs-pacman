@@ -1,59 +1,148 @@
+# MLFS 8.5 Glibc-2.44 —— §8.5（含 tzdata 2026e、34 locale、multilib lib32）；轉換規則見手冊 §7.4
 pkgname=glibc
-pkgver=2.26
+pkgver=2.44
 pkgrel=1
-pkgdesc="GNU C Library"
+pkgdesc="GNU C 庫（MLFS multilib：lib + lib32；第 8 章首包）"
 arch=('x86_64')
-url="http://www.gnu.org/software/libc"
-license=('GPL', 'LGPL')
-backup=(etc/ld.so.conf)
-source=(${pkgname}-${pkgver}.tar.xz
-	glibc-2.26-fhs-1.patch
-	nsswitch.conf
-	ld.so.conf)
+url="https://www.gnu.org/software/libc/"
+license=('GPL' 'LGPL' 'BSD' 'MIT')
+options=(!strip !debug !lto)
+# 規則 §7.4-1：depends 只寫帳本中存在的包名——glibc 是第 8 章首包，前面只有 bootstrap BLFS，
+# 而它不依賴那些，故為空。書 8.5 的構建依賴（Bash/Binutils/Coreutils/Gawk/GCC/Grep/Make/
+# Perl/Sed/Texinfo）是 chroot 手編底座，在 MLFS 帳本中不存在對應包，不寫。
+depends=()
+# 書 8.5.3/8.5.5 的 nsswitch.conf 與 ld.so.conf 進包；backup= 保證升級不覆蓋本機配置
+backup=(etc/nsswitch.conf
+        etc/ld.so.conf)
 install=glibc.install
+source=(${pkgname}-${pkgver}.tar.xz
+        ${pkgname}-${pkgver}-upstream_fixes-3.patch
+        ${pkgname}-fhs-1.patch
+        tzdata2026e.tar.gz)
+md5sums=('7677da43ef759c68e005f5d4c37986a6'
+         '9edd452f9f99d4f87d8470c7029d237c'
+         '9a5997c3452909b1769918c759eff8a2'
+         'e1bb044ee184daee12f3e83ca16def7f')
+# tzdata 是散檔 tar（無頂層目錄），makepkg 自動解壓會散落 $srcdir，改為 noextract 手動解
+noextract=(tzdata2026e.tar.gz)
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-    patch -Np1 -i ../glibc-2.26-fhs-1.patch
+    mkdir -p tzdata-src
+    tar -xf "${srcdir}/tzdata2026e.tar.gz" -C tzdata-src
+    # 兩棵構建樹：64 位用原樹（§8.5.1）；32 位用副本（§8.5.2）
+    cp -a ${pkgname}-${pkgver} build32
+    cd ${pkgname}-${pkgver}
+    # 書 8.5.1 兩個補丁，順序照書
+    patch -Np1 -i "../${pkgname}-fhs-1.patch"
+    patch -Np1 -i "../${pkgname}-${pkgver}-upstream_fixes-3.patch"
+    cd ../build32
+    patch -Np1 -i "../${pkgname}-fhs-1.patch"
+    patch -Np1 -i "../${pkgname}-${pkgver}-upstream_fixes-3.patch"
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-
-    mkdir -v build
+    # 64 位（書 8.5.1 configure 原文）：
+    #   書的 rm -fv /usr/share/config.site 是清 chroot 宿主殘留，makepkg 構建樹天然乾淨，等價省略；
+    #   書的兩階段安裝（dest install→拷 so→make install）是為「替換正在使用的 glibc」設計，
+    #   makepkg 是純 DESTDIR 構建，收斂為 package() 一次 DESTDIR install；
+    #   include-fixed 清理動的是系統 gcc 目錄（非包內容），放 .install scriptlet。
+    cd ${pkgname}-${pkgver}
+    mkdir -pv build
     cd build
-
-    GCC_INCDIR=/usr/lib/gcc/x86_64-pc-linux-gnu/7.2.0/include
-    CC="gcc -isystem $GCC_INCDIR -isystem /usr/include" \
-    ../configure --prefix=/usr                          \
-                 --disable-werror                       \
-		 --enable-kernel=3.2                    \
-		 --enable-stack-protector=strong        \
-		 libc_cv_slibdir=/lib
-    unset GCC_INCDIR
+    ../configure --prefix=/usr                   \
+                 --disable-werror                \
+                 --disable-nscd                  \
+                 libc_cv_slibdir=/usr/lib        \
+                 --enable-stack-protector=strong \
+                 --enable-kernel=5.10
+    make
+    cd ../../build32
+    # 32 位（書 8.5.2 configure 原文）
+    mkdir -pv build
+    cd build
+    CC="gcc -m32" CXX="g++ -m32"             \
+    ../configure                             \
+          --prefix=/usr                      \
+          --host=i686-pc-linux-gnu           \
+          --build=$(../../${pkgname}-${pkgver}/scripts/config.guess) \
+          --libdir=/usr/lib32                \
+          --libexecdir=/usr/lib32            \
+          --disable-werror                   \
+          --disable-nscd                     \
+          libc_cv_slibdir=/usr/lib32         \
+          --enable-stack-protector=strong    \
+          --enable-kernel=5.10
     make
 }
 
 check() {
-     cd "${pkgname}-${pkgver}"/build
-     make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    # 書 8.5.1：make check（64 位；耗時，makepkg.conf BUILDENV check 開啟才跑）。
+    # 書 8.5.1 的 grep "Timed out" $(find -name \*.out) 供人工核對逾時項。
+    cd ${pkgname}-${pkgver}/build && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"/build
+    # 64 位安裝（書 8.5.1）
+    cd ${pkgname}-${pkgver}/build
+    make DESTDIR="${pkgdir}" install
+    # 書 8.5.1：sed '/RTLDLIST=/s@/usr@@g' -i /usr/bin/ldd → 對包內文件等價照抄
+    sed '/RTLDLIST=/s@/usr@@g' -i "${pkgdir}/usr/bin/ldd"
+    # 書 8.5.1：rm -f /usr/sbin/nscd（--disable-nscd 下本不應存在，保險照做）
+    rm -fv "${pkgdir}/usr/sbin/nscd"
+    # 書 8.5.3：nsswitch.conf 全文（進包，backup=）
+    install -Dm644 /dev/stdin "${pkgdir}/etc/nsswitch.conf" <<'EOF'
+# Begin /etc/nsswitch.conf
 
-    install -v -dm755 ${pkgdir}/etc
-    touch ${pkgdir}/etc/ld.so.conf
-    make install_root=${pkgdir} install
+passwd: files
+group: files
+shadow: files
 
-    install -v -dm755 ${pkgdir}/etc/nsdc
-    install -v -m644 ${srcdir}/${pkgname}-${pkgver}/nscd/nscd.conf ${pkgdir}/etc/nscd.conf
-    install -v -dm755 ${pkgdir}/var/cache/nscd
+hosts: files dns
+networks: files
 
-    install -v -dm755 ${pkgdir}/usr/lib/locale
+protocols: files
+services: files
+ethers: files
+rpc: files
 
-    install -v -m644 ${srcdir}/nsswitch.conf ${pkgdir}/etc/nsswitch.conf
+# End /etc/nsswitch.conf
+EOF
+    # 書 8.5.5：ld.so.conf 全文＋include 行（書 8.5.5 兩段 heredoc 合併）
+    install -Dm644 /dev/stdin "${pkgdir}/etc/ld.so.conf" <<'EOF'
+# Begin /etc/ld.so.conf
+/usr/local/lib
+/opt/lib
 
-    install -v -m644 ${srcdir}/ld.so.conf ${pkgdir}/etc/
-    install -v -dm755 ${pkgdir}/etc/ld.so.conf.d
+# Add an include directory
+include /etc/ld.so.conf.d/*.conf
+
+EOF
+    install -d "${pkgdir}/etc/ld.so.conf.d"
+    # 32 位安裝（書 8.5.2）：make DESTDIR=$PWD/DESTDIR install → cp lib32 →
+    #   install lib-names/stubs-32.h → echo /usr/lib32 > /etc/ld.so.conf.d/lib32.conf
+    cd ../../build32/build
+    make DESTDIR="${srcdir}/glibc-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -a "${srcdir}/glibc-m32/usr/lib32/"* "${pkgdir}/usr/lib32/"
+    install -Dm644 "${srcdir}/glibc-m32/usr/include/gnu/lib-names-32.h" \
+                   "${pkgdir}/usr/include/gnu/lib-names-32.h"
+    install -Dm644 "${srcdir}/glibc-m32/usr/include/gnu/stubs-32.h" \
+                   "${pkgdir}/usr/include/gnu/stubs-32.h"
+    install -Dm644 /dev/stdin "${pkgdir}/etc/ld.so.conf.d/lib32.conf" <<'EOF'
+/usr/lib32
+EOF
+    # tzdata（書 8.5.4）：zic 三輪（plain/posix/right）＋三個 .tab＋-p 基準，全部 DESTDIR 化。
+    #   書的 tzselect（交互）與 ln -sf …/etc/localtime 是使用者配置，屬手冊 §8.2，不進包。
+    cd "${srcdir}/tzdata-src"
+    ZONEINFO="${pkgdir}/usr/share/zoneinfo"
+    mkdir -pv "${ZONEINFO}"/{posix,right}
+    for tz in etcetera southamerica northamerica europe africa antarctica  \
+              asia australasia backward; do
+        zic -L /dev/null   -d "${ZONEINFO}"       ${tz}
+        zic -L /dev/null   -d "${ZONEINFO}/posix" ${tz}
+        zic -L leapseconds -d "${ZONEINFO}/right" ${tz}
+    done
+    cp -v zone.tab zone1970.tab iso3166.tab "${ZONEINFO}"
+    zic -d "${ZONEINFO}" -p America/New_York
+    unset ZONEINFO tz
 }

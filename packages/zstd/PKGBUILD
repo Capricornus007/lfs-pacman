@@ -1,0 +1,50 @@
+# MLFS 8.10 Zstd-1.5.7 —— §8.10（multilib：lib + lib32）；無舊模板，依 §7.4 轉換規則自寫
+pkgname=zstd
+pkgver=1.5.7
+pkgrel=1
+pkgdesc="Zstandard 快速壓縮庫與工具（MLFS multilib）"
+arch=('x86_64')
+url="https://facebook.github.io/zstd/"
+license=('BSD-3-Clause' 'GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄：Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('780fc1896922b1bc52a4e90980cdda48')
+
+prepare() {
+    cp -a ${pkgname}-${pkgver} build32
+}
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.10.1：make prefix=/usr（64 位）
+    make prefix=/usr
+    cd ../build32
+    # 書 8.10.2：CC="gcc -m32" make prefix=/usr
+    CC="gcc -m32" make prefix=/usr
+}
+
+check() {
+    # 書 8.10.1：make check（64 位；書對 32 位未提供 check）
+    cd ${pkgname}-${pkgver} && make check
+}
+
+package() {
+    # 64 位：書 8.10.1 make prefix=/usr install → rm /usr/lib/libzstd.a
+    cd ${pkgname}-${pkgver}
+    make prefix=/usr DESTDIR="${pkgdir}" install
+    rm -fv "${pkgdir}/usr/lib/libzstd.a"
+    # 32 位：書 8.10.2 make prefix=/usr DESTDIR=$PWD/DESTDIR install
+    #        → cp DESTDIR/usr/lib/* /usr/lib32/ → sed 修 lib32 pkgconfig（規則 §7.4-3：
+    #        sed -i 在 fakeroot 下有 000 權限雷，改為輸出新檔再 install）
+    cd ../build32
+    make prefix=/usr DESTDIR="${srcdir}/zstd-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/zstd-m32/usr/lib/"* "${pkgdir}/usr/lib32/"
+    sed -e "/^libdir/s/lib$/lib32/" \
+        "${pkgdir}/usr/lib32/pkgconfig/libzstd.pc" \
+        > "${pkgdir}/usr/lib32/pkgconfig/libzstd.pc.new"
+    mv -f "${pkgdir}/usr/lib32/pkgconfig/libzstd.pc.new" \
+          "${pkgdir}/usr/lib32/pkgconfig/libzstd.pc"
+}

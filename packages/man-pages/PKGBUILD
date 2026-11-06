@@ -1,13 +1,23 @@
+# MLFS 8.3 Man-pages-6.20 —— 命令逐字取自離線書 dev-openrc #3d658 §8.3；轉換規則見手冊 §7.4
 pkgname=man-pages
-pkgver=4.12
+pkgver=6.20
 pkgrel=1
-pkgdesc="Linux man pages"
+pkgdesc="Linux man pages（約 2400 頁；crypt 手冊由 Libxcrypt 提供）"
 arch=('x86_64')
-url="http://man7.org/linux/man-pages/index.html"
-license=('GPL')
+url="https://www.kernel.org/doc/man-pages/"
+license=('GPL-2.0-or-later' 'BSD-3-Clause')
+options=(!strip !debug !lto)
+# 書 8.3 無構建依賴；帳本中無前置包
+depends=()
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('a9a0c253b048d38dfc0c994f1dff993b')
 
 package() {
     cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    # 書 8.3.1：刪兩頁密碼雜湊手冊，Libxcrypt 會提供更好的版本
+    rm -v man3/crypt*
+    # 書 8.3.1：make -R GIT=false prefix=/usr install
+    #   -R 擋 make 內建變數（man-pages 構建系統與之不睦）；GIT=false 擋 git 警告
+    #   舊模板實證其 Makefile 支援 DESTDIR
+    make -R GIT=false prefix=/usr install DESTDIR="${pkgdir}"
 }

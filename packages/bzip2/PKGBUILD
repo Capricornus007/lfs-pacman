@@ -1,42 +1,61 @@
+# MLFS 8.7 Bzip2-1.0.8 —— §8.7（multilib：lib + lib32）；轉換規則見手冊 §7.4
 pkgname=bzip2
-pkgver=1.0.6
+pkgver=1.0.8
 pkgrel=1
-pkgdesc="A high-quality data compression program"
+pkgdesc="高質量 bzip2 壓縮工具與 libbz2（MLFS multilib）"
 arch=('x86_64')
-url="http://sources.redhat.com/bzip2"
-license=('custom')
+url="https://www.sourceware.org/bzip2/"
+license=('BSD-4-Clause')
+options=(!strip !debug !lto)
+# 依賴附錄：Glibc
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.gz
-	bzip2-1.0.6-install_docs-1.patch)
+        ${pkgname}-${pkgver}-install_docs-1.patch)
+md5sums=('67e051268d0c475ea773822f7500d0e5'
+         '6a5ac7e89b791aae556de0f745916f7f')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-    
-    patch -Np1 -i ../bzip2-1.0.6-install_docs-1.patch
-
+    cd ${pkgname}-${pkgver}
+    # 書 8.7.1 三步照抄（patch＋兩個 sed 均為構建樹內操作，不觸包內 000 權限雷）
+    patch -Np1 -i ../${pkgname}-${pkgver}-install_docs-1.patch
     sed -i 's@\(ln -s -f \)$(PREFIX)/bin/@\1@' Makefile
-
     sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
+    # 兩棵樹：32 位照書 8.7.3（CC=gcc -m32 重編 Makefile-libbz2_so）
+    cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.7.1：先建共享庫再建靜態版工具
     make -f Makefile-libbz2_so
     make clean
     make
+    cd ../build32
+    # 書 8.7.3：make clean 後以 gcc -m32 重編共享庫
+    sed -e "s/^CC=.*/CC=gcc -m32/" -i Makefile{,-libbz2_so}
+    make -f Makefile-libbz2_so
 }
 
+# 書 8.7 無測試小節，不設 check()
+
 package() {
-    cd "${pkgname}-${pkgver}"
-    make PREFIX=${pkgdir}/usr install
-
-    install -vdm755 ${pkgdir}/bin
-    install -vdm755 ${pkgdir}/lib
-    install -vdm755 ${pkgdir}/usr/lib
-
-    install -vm755 bzip2-shared ${pkgdir}/bin/bzip2
-    cp -av libbz2.so.${pkgver} ${pkgdir}/lib
-    ln -sv ../../lib/libbz2.so.${pkgver} ${pkgdir}/usr/lib/libbz2.so
-    rm -v ${pkgdir}/usr/bin/{bunzip2,bzcat,bzip2}
-    ln -sv bzip2 ${pkgdir}/bin/bunzip2
-    ln -sv bzip2 ${pkgdir}/bin/bzcat
+    cd ${pkgname}-${pkgver}
+    # 書 8.7.1：make PREFIX=/usr install（bzip2 Makefile 用 PREFIX 重定向，不認 DESTDIR）
+    make PREFIX="${pkgdir}/usr" install
+    # 書 8.7.1：共享庫三連 + 工具符號連結（全部對 $pkgdir 等價照抄）
+    cp -av libbz2.so.* "${pkgdir}/usr/lib"
+    ln -sfv libbz2.so.1.0.8 "${pkgdir}/usr/lib/libbz2.so"
+    ln -sfv libbz2.so.1.0.8 "${pkgdir}/usr/lib/libbz2.so.1"
+    cp -v bzip2-shared "${pkgdir}/usr/bin/bzip2"
+    for i in bzcat bunzip2; do
+        ln -sfv bzip2 "${pkgdir}/usr/bin/$i"
+    done
+    # 書 8.7.1：rm -fv /usr/lib/libbz2.a（靜態庫不進包）
+    rm -fv "${pkgdir}/usr/lib/libbz2.a"
+    # 32 位（書 8.7.3）：lib32 三個符號連結照書
+    cd ../build32
+    install -Dm755 libbz2.so.1.0.8 "${pkgdir}/usr/lib32/libbz2.so.1.0.8"
+    ln -svf libbz2.so.1.0.8 "${pkgdir}/usr/lib32/libbz2.so"
+    ln -svf libbz2.so.1.0.8 "${pkgdir}/usr/lib32/libbz2.so.1"
+    ln -svf libbz2.so.1.0.8 "${pkgdir}/usr/lib32/libbz2.so.1.0"
 }

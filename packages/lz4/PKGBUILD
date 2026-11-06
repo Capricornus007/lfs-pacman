@@ -1,0 +1,47 @@
+# MLFS 8.9 Lz4-1.10.0 —— §8.9（multilib：lib + lib32）；無舊模板，依 §7.4 轉換規則自寫
+pkgname=lz4
+pkgver=1.10.0
+pkgrel=1
+pkgdesc="極快 LZ 壓縮庫與工具（MLFS multilib）"
+arch=('x86_64')
+url="https://lz4.github.io/lz4/"
+license=('BSD-2-Clause' 'GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄：Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('dead9f5f1966d9ae56e1e32761e4e675')
+
+prepare() {
+    cp -a ${pkgname}-${pkgver} build32
+}
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.9.1：make BUILD_STATIC=no PREFIX=/usr
+    make BUILD_STATIC=no PREFIX=/usr
+    cd ../build32
+    # 書 8.9.2：CC="gcc -m32" make BUILD_STATIC=no -C lib
+    CC="gcc -m32" make BUILD_STATIC=no -C lib
+}
+
+check() {
+    # 書 8.9.1：make -j1 check（64 位；書對 32 位未提供 check）
+    cd ${pkgname}-${pkgver} && make -j1 check
+}
+
+package() {
+    # 64 位：書 8.9.1 make BUILD_STATIC=no PREFIX=/usr install
+    cd ${pkgname}-${pkgver}
+    make BUILD_STATIC=no PREFIX=/usr install DESTDIR="${pkgdir}"
+    # 32 位：書 8.9.2 make … LIBDIR=/usr/lib32 DESTDIR=$(pwd)/m32 -C lib install
+    #        → cp -vR m32/usr/lib32/* /usr/lib32/
+    cd ../build32
+    make BUILD_STATIC=no    \
+         PREFIX=/usr        \
+         LIBDIR=/usr/lib32  \
+         DESTDIR="${srcdir}/lz4-m32" \
+         -C lib install
+    install -d "${pkgdir}/usr/lib32"
+    cp -vR "${srcdir}/lz4-m32/usr/lib32/"* "${pkgdir}/usr/lib32/"
+}

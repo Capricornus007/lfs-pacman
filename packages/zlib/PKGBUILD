@@ -1,27 +1,45 @@
+# MLFS 8.6 Zlib-1.3.2 —— §8.6（multilib：lib + lib32）；轉換規則見手冊 §7.4
 pkgname=zlib
-pkgver=1.2.11
+pkgver=1.3.2
 pkgrel=1
-pkgdesc="Compression library implementing the deflate compression method found in gzip and PKZIP"
+pkgdesc="deflate 壓縮庫（MLFS multilib：lib + lib32）"
 arch=('x86_64')
-url="https://zlib.net/"
-license=('custom')
-source=(${pkgname}-${pkgver}.tar.xz)
+url="https://www.zlib.net/"
+license=('ZLIB')
+options=(!strip !debug !lto)
+# 依賴附錄：Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('a1e6c958597af3c67d162995a342138a')
+
+prepare() {
+    # 兩棵構建樹：64 位用原樹（§8.6.1）；32 位用副本（§8.6.2：CFLAGS+=" -m32"、libdir=/usr/lib32）
+    cp -a ${pkgname}-${pkgver} build32
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
     ./configure --prefix=/usr
+    make
+    cd ../build32
+    CFLAGS+=" -m32" CXXFLAGS+=" -m32" \
+    ./configure --prefix=/usr --libdir=/usr/lib32
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    # 書 8.6.1：make check（64 位；書對 32 位未提供 check）
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    install -vdm755 ${pkgdir}/lib
-    mv -v ${pkgdir}/usr/lib/libz.so.* ${pkgdir}/lib
-    ln -sfv ../../lib/$(readlink ${pkgdir}/usr/lib/libz.so) ${pkgdir}/usr/lib/libz.so
+    # 64 位：書 8.6.1 make install → rm /usr/lib/libz.a（靜態庫不進包＝裝後刪的等價）
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
+    rm -fv "${pkgdir}/usr/lib/libz.a"
+    # 32 位：書 8.6.2 make DESTDIR=$PWD/DESTDIR install → cp DESTDIR/usr/lib32/* /usr/lib32
+    #   兩棵樹各自 DESTDIR 直裝到 $pkgdir，無需中轉拷貝
+    cd ../build32
+    make DESTDIR="${pkgdir}" install
+    rm -fv "${pkgdir}/usr/lib32/libz.a"
 }
