@@ -1,35 +1,34 @@
+# MLFS 8.35 Sed-4.10 —— §8.35
 pkgname=sed
-pkgver=4.4
+pkgver=4.10
 pkgrel=1
-pkgdesc="GNU stream editor"
+pkgdesc="GNU 串流編輯器"
 arch=('x86_64')
 url="https://www.gnu.org/software/sed/"
-license=('GPL3')
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Acl, Attr, and Glibc
+depends=('acl' 'attr' 'glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
-
-prepare() {
-    cd "${pkgname}-${pkgver}"
-    sed -i 's/usr/tools/'                 build-aux/help2man
-    sed -i 's/testsuite.panic-tests.sh//' Makefile.in
-
-}
+md5sums=('c70dc5372db95c816442ffedf77a0d0f')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr --bindir=/bin
-
+    cd ${pkgname}-${pkgver}
+    # 書 8.35 pre 1–2
+    ./configure --prefix=/usr
     make
     make html
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 pre 3 的 chown/su tester 省略：makepkg 本就非 root（§7.4 規則 12）
+    make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    install -vdm755             ${pkgdir}/usr/share/doc/sed-4.4
-    install -vm644 doc/sed.html ${pkgdir}/usr/share/doc/sed-4.4
+    cd ${pkgname}-${pkgver}
+    # 書 8.35 pre 4
+    make DESTDIR="${pkgdir}" install
+    install -vDm644 doc/sed.html -t "${pkgdir}/usr/share/doc/sed-4.10"
 }

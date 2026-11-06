@@ -1,26 +1,53 @@
+# MLFS 8.42 GDBM-1.26 —— §8.42（64 位主裝＋32 位只取 lib32）
 pkgname=gdbm
-pkgver=1.13
+pkgver=1.26
 pkgrel=1
-pkgdesc="GNU database library"
+pkgdesc="GNU 資料庫函式庫（含 dbm/ndbm 相容層）"
 arch=('x86_64')
-url="http://www.gnu.org/software/gdbm/gdbm.html"
-license=('GPL3')
+url="https://www.gnu.org/software/gdbm/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Glibc, and Readline
+depends=('bash' 'glibc' 'readline')
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('aaa600665bc89e2febb3c7bd90679115')
+
+prepare() {
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.42 pre 1–2
     ./configure --prefix=/usr    \
-		--disable-static \
-		--enable-libgdbm-compat
+                --disable-static \
+                --enable-libgdbm-compat
+    make
+
+    cd ../build32
+    # 書 8.42 pre 6–7
+    CC="gcc -m32" CXX="g++ -m32"         \
+    ./configure --prefix=/usr            \
+                --libdir=/usr/lib32      \
+                --host=i686-pc-linux-gnu \
+                --disable-static         \
+                --enable-libgdbm-compat
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.42 pre 4
+    make DESTDIR="${pkgdir}" install
+
+    cd ../build32
+    # 書 8.42 pre 8
+    rm -rf "${srcdir}/gdbm-m32"
+    make DESTDIR="${srcdir}/gdbm-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/gdbm-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
 }

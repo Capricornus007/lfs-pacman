@@ -1,19 +1,30 @@
+# MLFS 8.46 Less-710 —— §8.46
 pkgname=less
-pkgver=487
+pkgver=710
 pkgrel=1
-pkgdesc="A terminal based program for viewing text files"
+pkgdesc="終端分頁瀏覽器"
 arch=('x86_64')
-url="http://www.greenwoodsoftware.com/less"
-license=('GPL3')
+url="https://www.greenwoodsoftware.com/less/"
+license=('GPL-3.0-or-later' 'custom')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Ncurses
+depends=('glibc' 'ncurses')
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('c5b0ed0d7cebd3869feeae499c66a97b')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.46 pre 1–2
     ./configure --prefix=/usr --sysconfdir=/etc
     make
 }
 
+check() {
+    cd ${pkgname}-${pkgver} && make check
+}
+
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.46 pre 4
+    make DESTDIR="${pkgdir}" install
 }

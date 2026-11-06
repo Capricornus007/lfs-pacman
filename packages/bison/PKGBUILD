@@ -1,19 +1,30 @@
+# MLFS 8.38 Bison-3.8.2 —— §8.38
 pkgname=bison
-pkgver=3.0.4
+pkgver=3.8.2
 pkgrel=1
-pkgdesc="The GNU general-purpose parser generator"
+pkgdesc="GNU 通用剖析器產生器（yacc 相容）"
 arch=('x86_64')
-url="http://www.gnu.org/software/bison/bison.html"
-license=('GPL3')
+url="https://www.gnu.org/software/bison/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('c28f119f405a2304ff0a7ccdcc629713')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr --docdir=/usr/share/doc/bison-${pkgver}
+    cd ${pkgname}-${pkgver}
+    # 書 8.38 pre 1–2
+    ./configure --prefix=/usr --docdir=/usr/share/doc/bison-3.8.2
     make
 }
 
+check() {
+    cd ${pkgname}-${pkgver} && make check
+}
+
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.38 pre 4
+    make DESTDIR="${pkgdir}" install
 }

@@ -1,24 +1,30 @@
+# MLFS 8.48 Autoconf-2.73 —— §8.48
 pkgname=autoconf
-pkgver=2.69
+pkgver=2.73
 pkgrel=1
-pkgdesc="A GNU tool for automatically configuring source code"
+pkgdesc="GNU 自動產生 configure 腳本的工具"
 arch=('x86_64')
-url="http://www.gnu.org/software/autoconf"
-license=('custom' 'GPL2' 'GPL3')
+url="https://www.gnu.org/software/autoconf/"
+license=('GPL-3.0-or-later' 'custom')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Coreutils, Grep, M4, Make, Sed, and Texinfo
+depends=('bash' 'coreutils' 'grep' 'm4' 'make' 'sed' 'texinfo')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('9cbad9a116ef845bafeed8e7bc771bf4')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.48 pre 1–2
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.48 pre 4
+    make DESTDIR="${pkgdir}" install
 }

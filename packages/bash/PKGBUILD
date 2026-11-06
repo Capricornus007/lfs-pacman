@@ -1,35 +1,38 @@
+# MLFS 8.40 Bash-5.3 —— §8.40
 pkgname=bash
-pkgver=4.4
+pkgver=5.3
 pkgrel=1
-pkgdesc="The GNU Bourne Again shell"
+pkgdesc="GNU Bourne Again shell"
 arch=('x86_64')
-url="http://www.gnu.org/software/bash/bash.html"
-license=('GPL')
-source=(${pkgname}-${pkgver}.tar.gz
-	bash-4.4-upstream_fixes-1.patch)
-
-prepare() {
-    cd "${pkgname}-${pkgver}"
-    patch -Np1 -i ../bash-4.4-upstream_fixes-1.patch
-}
+url="https://www.gnu.org/software/bash/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc, Ncurses, and Readline
+depends=('glibc' 'ncurses' 'readline')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('977c8c0c5ae6309191e7768e28ebc951')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr                          \
-		--docdir=/usr/share/doc/bash-${pkgver} \
-		--without-bash-malloc                  \
-		--with-installed-readline
+    cd ${pkgname}-${pkgver}
+    # 書 8.40 pre 1–2
+    ./configure --prefix=/usr             \
+                --without-bash-malloc     \
+                --with-installed-readline \
+                --docdir=/usr/share/doc/bash-5.3
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 pre 3–4 用 expect 驅動的 su tester 是「別用 root 跑測試」；
+    # makepkg 非 root，直接 make tests（§7.4 規則 12）
+    make tests
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    install -vdm755 ${pkgdir}/bin
-    mv -vf ${pkgdir}/usr/bin/bash ${pkgdir}/bin
+    cd ${pkgname}-${pkgver}
+    # 書 8.40 pre 5
+    make DESTDIR="${pkgdir}" install
+    # 書 pre 6 `exec /usr/bin/bash --login` 是對當前 shell 的動作，
+    # 純 DESTDIR 打包不執行；列為安裝後的操作者檢查（規則 12）。
 }

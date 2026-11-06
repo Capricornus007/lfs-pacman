@@ -1,23 +1,30 @@
+# MLFS 8.36 Psmisc-23.7 —— §8.36
 pkgname=psmisc
-pkgver=23.1
+pkgver=23.7
 pkgrel=1
-pkgdesc="Miscellaneous procfs tools"
+pkgdesc="procfs 相關工具（fuser、killall、pstree…）"
 arch=('x86_64')
-url="http://psmisc.sourceforge.net/index.html"
-license=('GPL')
+url="https://psmisc.sourceforge.io/"
+license=('GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Ncurses
+depends=('glibc' 'ncurses')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('53eae841735189a896d614cba440eb10')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.36 pre 1–2
     ./configure --prefix=/usr
     make
 }
 
-package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+check() {
+    cd ${pkgname}-${pkgver} && make check
+}
 
-    install -vdm755 ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/fuser   ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/killall ${pkgdir}/bin
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.36 pre 4；舊模板把 fuser/killall 搬到 /bin 是 2017 版習慣，現行書無此步，不沿用
+    make DESTDIR="${pkgdir}" install
 }

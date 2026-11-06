@@ -1,24 +1,52 @@
+# MLFS 8.41 Libtool-2.6.2 —— §8.41（64 位主裝＋32 位只取 lib32）
 pkgname=libtool
-pkgver=2.4.6
+pkgver=2.6.2
 pkgrel=1
-pkgdesc="A generic library support script"
+pkgdesc="GNU 通用函式庫支援腳本（libltdl）"
 arch=('x86_64')
-url="http://www.gnu.org/software/libtool"
-license=('GPL')
+url="https://www.gnu.org/software/libtool/"
+license=('GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Autoconf, Automake, Bash, Binutils, Coreutils, File, GCC,
+#             Glibc, Grep, Make, and Sed（帳本名小寫；多數為後批，規則 9/11）
+depends=('autoconf' 'automake' 'bash' 'binutils' 'coreutils' 'file' 'gcc'
+         'glibc' 'grep' 'make' 'sed')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('87743862e6cabfb9e76651bc64e31e5c')
+
+prepare() {
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.41 pre 1–2
     ./configure --prefix=/usr
+    make
+
+    cd ../build32
+    # 書 8.41 pre 7–8
+    CC="gcc -m32" ./configure    \
+        --host=i686-pc-linux-gnu \
+        --prefix=/usr            \
+        --libdir=/usr/lib32
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.41 pre 4–5
+    make DESTDIR="${pkgdir}" install
+    rm -fv "${pkgdir}/usr/lib/libltdl.a"
+
+    cd ../build32
+    # 書 8.41 pre 9
+    rm -rf "${srcdir}/libtool-m32"
+    make DESTDIR="${srcdir}/libtool-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/libtool-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
 }

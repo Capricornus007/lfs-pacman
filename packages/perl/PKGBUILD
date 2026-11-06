@@ -1,42 +1,49 @@
+# MLFS 8.47 Perl-5.44.0 —— §8.47（Configure 系，非 autotools）
 pkgname=perl
-pkgver=5.26.0
+pkgver=5.44.0
 pkgrel=1
-pkgdesc="A highly capable, feature-rich programming language"
+pkgdesc="高階通用程式語言（core_perl）"
 arch=('x86_64')
-url="http://www.perl.org/"
-license=('GPL' 'PerlArtistic')
+url="https://www.perl.org/"
+license=('GPL-1.0-or-later' 'Artistic-1.0-Perl')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=GDBM, Glibc, and Libxcrypt
+depends=('gdbm' 'glibc' 'libxcrypt')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('55761cf1543af326492fd194647796d1')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-
+    cd ${pkgname}-${pkgver}
+    # 書 8.47 pre 1–3
     export BUILD_ZLIB=False
     export BUILD_BZIP2=0
-
-    sh Configure -des -Dprefix=/usr                 \
-                      -Dvendorprefix=/usr           \
-		      -Dman1dir=/usr/share/man/man1 \
-                      -Dman3dir=/usr/share/man/man3 \
-                      -Dpager="/usr/bin/less -isR"  \
-                      -Duseshrplib                  \
-		      -Dusethreads
+    sh Configure -des                                          \
+                 -D prefix=/usr                                \
+                 -D vendorprefix=/usr                          \
+                 -D privlib=/usr/lib/perl5/5.44/core_perl      \
+                 -D archlib=/usr/lib/perl5/5.44/core_perl      \
+                 -D sitelib=/usr/lib/perl5/5.44/site_perl      \
+                 -D sitearch=/usr/lib/perl5/5.44/site_perl     \
+                 -D vendorlib=/usr/lib/perl5/5.44/vendor_perl  \
+                 -D vendorarch=/usr/lib/perl5/5.44/vendor_perl \
+                 -D man1dir=/usr/share/man/man1                \
+                 -D man3dir=/usr/share/man/man3                \
+                 -D pager="/usr/bin/less -isR"                 \
+                 -D useshrplib                                 \
+                 -D usethreads
     make
-
-    unset BUILD_ZLIB BUILD_BZIP2
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make -k test 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 8.47 pre 4
+    TEST_JOBS=$(nproc) make test_harness
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-
+    cd ${pkgname}-${pkgver}
+    # 書 8.47 pre 5；Configure 產生的 Makefile 支援 DESTDIR
     export BUILD_ZLIB=False
     export BUILD_BZIP2=0
-    
-    make DESTDIR=${pkgdir} install
-
-    unset BUILD_ZLIB BUILD_BZIP2
+    make DESTDIR="${pkgdir}" install
 }

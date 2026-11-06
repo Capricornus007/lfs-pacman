@@ -1,24 +1,30 @@
+# MLFS 8.43 Gperf-3.3 —— §8.43
 pkgname=gperf
-pkgver=3.1
+pkgver=3.3
 pkgrel=1
-pkgdesc="Perfect hash function generator"
+pkgdesc="完美雜湊函式產生器"
 arch=('x86_64')
-url="http://www.gnu.org/software/gperf/"
-license=('GPL3')
+url="https://www.gnu.org/software/gperf/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=GCC and Glibc
+depends=('gcc' 'glibc')
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('31753b021ea78a21f154bf9eecb8b079')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr --docdir=/usr/share/doc/gperf-${pkgver}
+    cd ${pkgname}-${pkgver}
+    # 書 8.43 pre 1–2
+    ./configure --prefix=/usr --docdir=/usr/share/doc/gperf-3.3
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make -j1 check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.43 pre 4
+    make DESTDIR="${pkgdir}" install
 }

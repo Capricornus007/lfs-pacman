@@ -1,32 +1,56 @@
+# MLFS 8.44 Expat-2.9.0 —— §8.44（64 位主裝＋32 位只取 lib32）
+# 書 pre 6 的 sed/make clean 是「同一棵樹改 configure 前不要重建 doc」；
+# 採兩棵乾淨樹後不需要（§7.4 規則 10 的等價改寫）。
 pkgname=expat
-pkgver=2.2.3
+pkgver=2.9.0
 pkgrel=1
-pkgdesc="An XML parser library"
+pkgdesc="XML 解析 C 函式庫"
 arch=('x86_64')
-url="http://expat.sourceforge.net/"
-license=('custom')
-source=(${pkgname}-${pkgver}.tar.bz2)
+url="https://libexpat.github.io/"
+license=('MIT')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('fa5ea2bb996c624133368a87206d72af')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-    sed -i 's|usr/bin/env |bin/|' run.sh.in
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr --disable-static
+    cd ${pkgname}-${pkgver}
+    # 書 8.44 pre 1–2
+    ./configure --prefix=/usr    \
+                --disable-static \
+                --docdir=/usr/share/doc/expat-2.9.0
+    make
+
+    cd ../build32
+    # 書 8.44 pre 7–8
+    CC="gcc -m32"                        \
+    ./configure --prefix=/usr            \
+                --libdir=/usr/lib32      \
+                --host=i686-pc-linux-gnu \
+                --disable-static
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.44 pre 4–5
+    make DESTDIR="${pkgdir}" install
+    install -d "${pkgdir}/usr/share/doc/expat-2.9.0"
+    install -v -m644 doc/*.{html,css} "${pkgdir}/usr/share/doc/expat-2.9.0"
 
-    install -vdm755 ${pkgdir}/usr/share/doc/expat-${pkgver}
-    install -vm644 doc/*.{html,png,css} ${pkgdir}/usr/share/doc/expat-${pkgver}
+    cd ../build32
+    # 書 8.44 pre 9
+    rm -rf "${srcdir}/expat-m32"
+    make DESTDIR="${srcdir}/expat-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/expat-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
 }

@@ -1,37 +1,47 @@
+# MLFS 8.45 Inetutils-2.8 —— §8.45
 pkgname=inetutils
-pkgver=1.9.4
+pkgver=2.8
 pkgrel=1
-pkgdesc="A collection of common network programs"
+pkgdesc="常見網路工具集（ping、telnet、ftp、ifconfig…）"
 arch=('x86_64')
-url="http://www.gnu.org/software/inetutils/"
-license=('GPL3')
-source=(${pkgname}-${pkgver}.tar.xz)
+url="https://www.gnu.org/software/inetutils/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=GCC, Glibc, Ncurses, and Readline
+depends=('gcc' 'glibc' 'ncurses' 'readline')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('f0f9ad13045a67da9c882148f9efae6b')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.45 pre 1
+    sed -i 's/def HAVE_TERMCAP_TGETENT/ 1/' telnet/telnet.c
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.45 pre 2–3
     ./configure --prefix=/usr        \
-		--localstatedir=/var \
-		--disable-logger     \
-		--disable-whois      \
-		--disable-rcp        \
-		--disable-rexec      \
-		--disable-rlogin     \
-		--disable-rsh        \
-		--disable-servers
+                --bindir=/usr/bin    \
+                --localstatedir=/var \
+                --disable-logger     \
+                --disable-whois      \
+                --disable-rcp        \
+                --disable-rexec      \
+                --disable-rlogin     \
+                --disable-rsh        \
+                --disable-servers
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/bin
-    install -vdm755 ${pkgdir}/sbin
-    mv -v ${pkgdir}/usr/bin/{hostname,ping,ping6,traceroute} ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/ifconfig ${pkgdir}/sbin
+    cd ${pkgname}-${pkgver}
+    # 書 8.45 pre 5–6（/usr/bin/ifconfig → /usr/sbin/ifconfig）
+    make DESTDIR="${pkgdir}" install
+    install -d "${pkgdir}/usr/sbin"
+    mv -v "${pkgdir}/usr/bin/ifconfig" "${pkgdir}/usr/sbin/ifconfig"
 }

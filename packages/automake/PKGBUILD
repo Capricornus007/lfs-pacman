@@ -1,25 +1,32 @@
+# MLFS 8.49 Automake-1.19 —— §8.49
 pkgname=automake
-pkgver=1.15.1
+pkgver=1.19
 pkgrel=1
-pkgdesc="A GNU tool for automatically creating Makefiles"
+pkgdesc="GNU 自動產生 Makefile.in 的工具"
 arch=('x86_64')
-url="http://www.gnu.org/software/automake"
-license=('GPL')
+url="https://www.gnu.org/software/automake/"
+license=('GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Coreutils, Grep, M4, Sed, and Texinfo
+depends=('bash' 'coreutils' 'grep' 'm4' 'sed' 'texinfo')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('da9b5c852b94089c7b7b16071ce8803c')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr --docdir=/usr/share/doc/automake-${pkgver}
+    cd ${pkgname}-${pkgver}
+    # 書 8.49 pre 1–2
+    ./configure --prefix=/usr --docdir=/usr/share/doc/automake-1.19
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    sed -i "s:./configure:LEXLIB=/usr/lib/libfl.a &:" t/lex-{clean,depend}-cxx.sh
-    make -j4 check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 8.49 pre 3
+    make -j$(($(nproc)>4?$(nproc):4)) check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.49 pre 4
+    make DESTDIR="${pkgdir}" install
 }

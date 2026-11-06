@@ -1,0 +1,64 @@
+# MLFS 8.50 OpenSSL-4.1.0 —— §8.50（無舊模板自寫；./config 系，兩棵樹）
+pkgname=openssl
+pkgver=4.1.0
+pkgrel=1
+pkgdesc="TLS/SSL 與通用密碼學工具組"
+arch=('x86_64')
+url="https://www.openssl.org/"
+license=('Apache-2.0')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Perl
+depends=('glibc' 'perl')
+makedepends=('zlib' 'perl')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('3dd690cc5ed65605cf4d125c1176439c')
+
+prepare() {
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+}
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.50 pre 1–2
+    ./config --prefix=/usr         \
+             --openssldir=/etc/ssl \
+             --libdir=lib          \
+             shared                \
+             zlib-dynamic
+    make
+
+    cd ../build32
+    # 書 8.50 pre 8–9（linux-x86 目標＋no-docs，只取 lib32）
+    ./config --prefix=/usr         \
+             --openssldir=/etc/ssl \
+             --libdir=lib32        \
+             shared                \
+             zlib-dynamic          \
+             no-docs               \
+             linux-x86
+    make
+}
+
+check() {
+    cd ${pkgname}-${pkgver} && make test
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.50 pre 4；OpenSSL Makefile 認 DESTDIR（書 pre 10 亦用）
+    make INSTALL_LIBS= MANSUFFIX=ssl DESTDIR="${pkgdir}" install
+    # 書 8.50 pre 5–6
+    if [ -d "${pkgdir}/usr/share/doc/openssl" ]; then
+        mv -v "${pkgdir}/usr/share/doc/openssl" \
+              "${pkgdir}/usr/share/doc/openssl-4.1.0"
+    fi
+    install -d "${pkgdir}/usr/share/doc/openssl-4.1.0"
+    cp -vfr doc/. "${pkgdir}/usr/share/doc/openssl-4.1.0/"
+
+    cd ../build32
+    # 書 8.50 pre 10
+    rm -rf "${srcdir}/openssl-m32"
+    make DESTDIR="${srcdir}/openssl-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/openssl-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
+}

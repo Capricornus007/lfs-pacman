@@ -1,24 +1,36 @@
+# MLFS 8.39 Grep-3.12 —— §8.39
 pkgname=grep
-pkgver=3.1
+pkgver=3.12
 pkgrel=1
-pkgdesc="A string search utility"
+pkgdesc="GNU 字串搜尋工具"
 arch=('x86_64')
 url="https://www.gnu.org/software/grep/"
-license=('GPL3')
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('5d9301ed9d209c4a88c8d3a6fd08b9ac')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.39 pre 1
+    sed -i "s/echo/#echo/" src/egrep.sh
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr --bindir=/bin
+    cd ${pkgname}-${pkgver}
+    # 書 8.39 pre 2–3
+    ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.39 pre 5
+    make DESTDIR="${pkgdir}" install
 }
