@@ -1,0 +1,59 @@
+# MLFS 8.55 Python-3.15.2 —— §8.55（雙來源：主 tar＋HTML 文件；/etc/pip.conf 進包）
+# 書節名首字母大寫，但 pacman 帳本名一律小寫 python（見 §7.4 規則 14）。
+pkgname=python
+pkgver=3.15.2
+pkgrel=1
+pkgdesc="高階通用程式語言（CPython 3.15）"
+arch=('x86_64')
+url="https://www.python.org/"
+license=('PSF-2.0')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bzip2, Expat, Gdbm, Glibc, Libffi, Libxcrypt,
+#             Mpdecimal, Ncurses, OpenSSL, and Zlib
+depends=('bzip2' 'expat' 'gdbm' 'glibc' 'libffi' 'libxcrypt'
+         'mpdecimal' 'ncurses' 'openssl' 'zlib')
+source=(Python-${pkgver}.tar.xz
+        python-${pkgver}-docs-html.tar.bz2)
+md5sums=('fa9fdb83b421033bd86f43662d311f69'
+         '0e00ffa02d844bc89ea83c00af42ec91')
+backup=(etc/pip.conf)
+
+build() {
+    cd Python-${pkgver}
+    # 書 8.55 pre 1–2
+    ./configure --prefix=/usr          \
+                --enable-shared        \
+                --with-system-expat    \
+                --enable-optimizations \
+                --without-static-libpython
+    make
+}
+
+check() {
+    cd Python-${pkgver}
+    # 書 8.55 pre 3
+    make test TESTOPTS="--timeout 120"
+}
+
+package() {
+    cd Python-${pkgver}
+    # 書 8.55 pre 4
+    make DESTDIR="${pkgdir}" install
+
+    # 書 8.55 pre 5：/etc/pip.conf 是「新建立的配置檔」，作用對象可落在 $pkgdir，
+    # 故寫進套件並列 backup=（規則 12：只有對既有系統狀態的動作才歸 .install）。
+    install -d "${pkgdir}/etc"
+    cat > "${pkgdir}/etc/pip.conf" <<'EOF'
+[global]
+root-user-action = ignore
+disable-pip-version-check = true
+EOF
+
+    # 書 8.55 pre 6
+    install -vdm755 "${pkgdir}/usr/share/doc/python-3.15.2/html"
+    tar --strip-components=1  \
+        --no-same-owner       \
+        --no-same-permissions \
+        -C "${pkgdir}/usr/share/doc/python-3.15.2/html" \
+        -xf "${srcdir}/python-3.15.2-docs-html.tar.bz2"
+}

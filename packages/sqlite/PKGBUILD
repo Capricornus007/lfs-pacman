@@ -1,0 +1,70 @@
+# MLFS 8.53 Sqlite-3540100 —— §8.53（雙來源：autoconf tar＋doc zip；64 位主裝＋32 位 lib32）
+pkgname=sqlite
+pkgver=3540100
+pkgrel=1
+pkgdesc="自給自足的 SQL 資料庫引擎"
+arch=('x86_64')
+url="https://sqlite.org/"
+license=('custom:PublicDomain')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
+source=(sqlite-autoconf-${pkgver}.tar.gz
+        sqlite-doc-${pkgver}.zip)
+noextract=(sqlite-doc-${pkgver}.zip)
+md5sums=('5578c8ff43f5eb1ec671f0a2766b53c9'
+         'f6dfc9d04e7c837ab03a5bb28b3cce9b')
+
+prepare() {
+    cd sqlite-autoconf-${pkgver}
+    # 書 8.53 pre 1：zip 用 python3 解到源碼樹（不讓 makepkg 自動解，規則同 glibc 的 tzdata）
+    python3 -m zipfile -e "${srcdir}/sqlite-doc-${pkgver}.zip" .
+    cd ..
+    rm -rf build32; cp -a sqlite-autoconf-${pkgver} build32
+}
+
+build() {
+    cd sqlite-autoconf-${pkgver}
+    # 書 8.53 pre 2–3
+    ./configure --prefix=/usr     \
+                --disable-static  \
+                --enable-fts{4,5} \
+                CPPFLAGS="-D SQLITE_ENABLE_COLUMN_METADATA=1 \
+                          -D SQLITE_ENABLE_UNLOCK_NOTIFY=1   \
+                          -D SQLITE_ENABLE_DBSTAT_VTAB=1     \
+                          -D SQLITE_SECURE_DELETE=1"
+    make LDFLAGS.rpath=""
+
+    cd ../build32
+    # 書 8.53 pre 7–8
+    CC="gcc -m32" CXX="g++ -m32"         \
+    ./configure --prefix=/usr            \
+                --libdir=/usr/lib32      \
+                --host=i686-pc-linux-gnu \
+                --disable-static         \
+                --enable-fts{4,5}        \
+                CPPFLAGS="-D SQLITE_ENABLE_COLUMN_METADATA=1 \
+                          -D SQLITE_ENABLE_UNLOCK_NOTIFY=1   \
+                          -D SQLITE_ENABLE_DBSTAT_VTAB=1     \
+                          -D SQLITE_SECURE_DELETE=1"
+    make LDFLAGS.rpath=""
+}
+
+check() {
+    cd sqlite-autoconf-${pkgver} && make check
+}
+
+package() {
+    cd sqlite-autoconf-${pkgver}
+    # 書 8.53 pre 4–5
+    make DESTDIR="${pkgdir}" install
+    install -d "${pkgdir}/usr/share/doc/sqlite-3.54.1"
+    cp -v -R sqlite-doc-${pkgver}/. "${pkgdir}/usr/share/doc/sqlite-3.54.1/"
+
+    cd ../build32
+    # 書 8.53 pre 9
+    rm -rf "${srcdir}/sqlite-m32"
+    make DESTDIR="${srcdir}/sqlite-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/sqlite-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
+}

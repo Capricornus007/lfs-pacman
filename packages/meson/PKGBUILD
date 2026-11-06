@@ -1,0 +1,64 @@
+# MLFS 8.60 Meson-1.12.1 —— §8.60（pip wheel → pip install；補補全與 cross/native 檔）
+# 這份是 pacman 7.1.0 bootstrap 的關鍵前置：§7.2 的 meson 建置靠它。
+pkgname=meson
+pkgver=1.12.1
+pkgrel=1
+pkgdesc="高速、易用的建置系統（Ninja 後端）"
+arch=('x86_64')
+url="https://mesonbuild.com/"
+license=('Apache-2.0')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Python；kmod（8.61）的 32 位建置會用本套件裝的 cross 檔
+depends=('python' 'ninja')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('c6eb71722ba220419cbebab8b1bd895f')
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.60 pre 1
+    pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps "$PWD"
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.60 pre 2 前半（規則 14 的 DESTDIR 化）
+    pip3 install --root "${pkgdir}" --ignore-installed \
+        --no-index --find-links dist --no-deps meson
+    # 書 8.60 pre 2 後半：shell completions
+    install -vDm644 data/shell-completions/bash/meson \
+        "${pkgdir}/usr/share/bash-completion/completions/meson"
+    install -vDm644 data/shell-completions/zsh/_meson \
+        "${pkgdir}/usr/share/zsh/site-functions/_meson"
+
+    # 書 8.60 pre 3：cross/lib32 與 native/x86 兩份內容相同（照書）
+    install -d "${pkgdir}/usr/share/meson/cross" "${pkgdir}/usr/share/meson/native"
+    for i in cross/lib32 native/x86; do
+        cat > "${pkgdir}/usr/share/meson/$i" << "EOF"
+[binaries]
+c = ['gcc', '-m32']
+cpp = ['g++', '-m32']
+rust = ['rustc', '--target', 'i686-unknown-linux-gnu']
+pkg-config = 'i686-pc-linux-gnu-pkg-config'
+ar = '/usr/bin/ar'
+strip = '/usr/bin/strip'
+cups-config = 'cups-config'
+llvm-config = 'llvm-config'
+exe_wrapper = ''
+
+[built-in options]
+libdir = 'lib32'
+
+[properties]
+sizeof_void* = 4
+sizeof_long = 4
+
+[host_machine]
+system = 'linux'
+subsystem = 'linux'
+kernel = 'linux'
+cpu_family = 'x86'
+cpu = 'i686'
+endian = 'little'
+EOF
+    done
+}

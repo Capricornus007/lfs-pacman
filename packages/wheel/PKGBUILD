@@ -1,0 +1,26 @@
+# MLFS 8.58 Wheel-0.48.0 —— §8.58（pip wheel → pip install）
+pkgname=wheel
+pkgver=0.48.0
+pkgrel=1
+pkgdesc="Python wheel 打包格式工具"
+arch=('x86_64')
+url="https://pypi.org/project/wheel/"
+license=('MIT')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Python
+depends=('python')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('f668e4885de814378b332eceea04a8a0')
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.58 pre 1
+    pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps "$PWD"
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.58 pre 2（規則 14 的 DESTDIR 化）
+    pip3 install --root "${pkgdir}" --ignore-installed \
+        --no-index --find-links dist --no-deps wheel
+}

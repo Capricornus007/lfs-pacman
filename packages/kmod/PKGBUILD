@@ -1,32 +1,54 @@
+# MLFS 8.61 Kmod-34.2 —— §8.61（meson/ninja；64 位主裝＋32 位 lib32）
+# 書在同一 build/ 裡 `rm -rf *` 後重 setup；改用 build/ 與 build32/ 兩棵樹（規則 10）。
+# 32 位的 --cross-file=lib32 由 8.60 Meson 裝到 /usr/share/meson/cross/lib32。
 pkgname=kmod
-pkgver=24
+pkgver=34.2
 pkgrel=1
-pkgdesc="Linux kernel module management tools and library"
+pkgdesc="Linux 核心模組管理工具（depmod/modprobe…）"
 arch=('x86_64')
-url="http://git.kernel.org/?p=utils/kernel/kmod/kmod.git;a=summary"
-license=('GPL2')
+url="https://git.kernel.org/pub/scm/utils/kernel/kmod/kmod.git"
+license=('GPL-2.0-or-later' 'LGPL-2.1-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc, Xz, and Zlib
+depends=('glibc' 'xz' 'zlib')
+makedepends=('meson' 'ninja' 'pkgconf')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('36f2cc483745e81ede3406fa55e1065a')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr          \
-		--bindir=/bin          \
-		--sysconfdir=/etc      \
-		--with-rootlibdir=/lib \
-		--with-xz              \
-		--with-zlib
-    make
+    cd ${pkgname}-${pkgver}
+    rm -rf build build32; mkdir -v build build32
+
+    cd build
+    # 書 8.61 pre 1–2
+    meson setup --prefix=/usr ..    \
+                --buildtype=release \
+                -D manpages=false
+    ninja
+
+    cd ../build32
+    # 書 8.61 pre 5–6
+    meson setup --prefix=/usr       \
+                --buildtype=release \
+                --cross-file=lib32  \
+                -D manpages=false   \
+                ..
+    ninja
+}
+
+check() {
+    cd ${pkgname}-${pkgver}/build && ninja test
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}/build
+    # 書 8.61 pre 3；規則 10：DESTDIR 必須前置為環境變數
+    DESTDIR="${pkgdir}" ninja install
 
-    install -vdm755 ${pkgdir}/sbin
-    install -vdm755 ${pkgdir}/bin
-    for target in depmod insmod lsmod modinfo modprobe rmmod; do
-	ln -sfv ../bin/kmod ${pkgdir}/sbin/$target
-    done
-
-    ln -sfv kmod ${pkgdir}/bin/lsmod
+    cd ../build32
+    # 書 8.61 pre 7
+    rm -rf "${srcdir}/kmod-m32"
+    DESTDIR="${srcdir}/kmod-m32" ninja install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/kmod-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
 }

@@ -1,0 +1,53 @@
+# MLFS 8.52 Libffi-3.8.0 —— §8.52（64 位主裝＋32 位只取 lib32）
+pkgname=libffi
+pkgver=3.8.0
+pkgrel=1
+pkgdesc="外部函式呼叫介面（FFI）函式庫"
+arch=('x86_64')
+url="https://sourceware.org/libffi/"
+license=('MIT')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('96fe46f2a7bb82559b35a268a2c000ba')
+
+prepare() {
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+}
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.52 pre 1–2
+    ./configure --prefix=/usr    \
+                --disable-static \
+                --with-gcc-arch=native
+    make
+
+    cd ../build32
+    # 書 8.52 pre 6–7
+    CC="gcc -m32" CXX="g++ -m32"         \
+    ./configure --prefix=/usr            \
+                --libdir=/usr/lib32      \
+                --host=i686-pc-linux-gnu \
+                --disable-static         \
+                --with-gcc-arch=i686
+    make
+}
+
+check() {
+    cd ${pkgname}-${pkgver} && make check
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.52 pre 4
+    make DESTDIR="${pkgdir}" install
+
+    cd ../build32
+    # 書 8.52 pre 9
+    rm -rf "${srcdir}/libffi-m32"
+    make DESTDIR="${srcdir}/libffi-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/libffi-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
+}

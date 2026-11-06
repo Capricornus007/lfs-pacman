@@ -1,0 +1,32 @@
+# MLFS 8.54 mpdecimal-4.0.1 —— §8.54
+pkgname=mpdecimal
+pkgver=4.0.1
+pkgrel=1
+pkgdesc="任意精度十進位浮點函式庫（Python decimal 後端）"
+arch=('x86_64')
+url="https://www.bytereef.org/mpdecimal/"
+license=('BSD-2-Clause')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=GCC and Glibc
+depends=('gcc' 'glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('3d4412579b1edc1047efab151889cca9')
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.54 pre 1–2
+    ./configure --prefix=/usr    \
+                --disable-static \
+                --docdir=/usr/share/doc/mpdecimal-4.0.1
+    make
+}
+
+check() {
+    cd ${pkgname}-${pkgver} && make check_local
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.54 pre 4
+    make DESTDIR="${pkgdir}" install
+}

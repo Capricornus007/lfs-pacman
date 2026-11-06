@@ -1,0 +1,61 @@
+# MLFS 8.51 Libelf from Elfutils-0.197 —— §8.51（只編 libelf，不裝 eu-* 工具）
+# 來源 tar 名是 elfutils-*，不是 libelf-*；包名仍為 libelf（規則 §7.4-8）。
+pkgname=libelf
+pkgver=0.197
+pkgrel=1
+pkgdesc="ELF/DWARF 讀寫函式庫（取自 elfutils，僅 libelf）"
+arch=('x86_64')
+url="https://sourceware.org/elfutils/"
+license=('LGPL-3.0-or-later' 'GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bzip2, Glibc, Xz, Zlib, and Zstd
+depends=('bzip2' 'glibc' 'xz' 'zlib' 'zstd')
+source=(elfutils-${pkgver}.tar.bz2)
+md5sums=('072992c8388b958dc006c6cfb74a0100')
+
+prepare() {
+    rm -rf build32; cp -a elfutils-${pkgver} build32
+}
+
+build() {
+    cd elfutils-${pkgver}
+    # 書 8.51 pre 1–2
+    ./configure --prefix=/usr        \
+                --disable-debuginfod \
+                --enable-libdebuginfod=dummy
+    make -C lib
+    make -C libelf
+
+    cd ../build32
+    # 書 8.51 pre 6–7
+    CC="gcc -m32" CXX="g++ -m32"         \
+    ./configure --prefix=/usr            \
+                --libdir=/usr/lib32      \
+                --host=i686-pc-linux-gnu \
+                --disable-debuginfod     \
+                --enable-libdebuginfod=dummy
+    make -C lib
+    make -C libelf
+}
+
+check() {
+    cd elfutils-${pkgver} && make -k check
+}
+
+package() {
+    cd elfutils-${pkgver}
+    # 書 8.51 pre 4：只裝 libelf，補 libelf.pc，移除靜態庫
+    make -C libelf DESTDIR="${pkgdir}" install
+    install -vDm644 config/libelf.pc "${pkgdir}/usr/lib/pkgconfig/libelf.pc"
+    rm -f "${pkgdir}/usr/lib/libelf.a"
+
+    cd ../build32
+    # 書 8.51 pre 8：32 位進暫存樹後只取 lib32
+    rm -rf "${srcdir}/libelf-m32"
+    make DESTDIR="${srcdir}/libelf-m32" -C libelf install
+    install -vDm644 config/libelf.pc \
+        "${srcdir}/libelf-m32/usr/lib32/pkgconfig/libelf.pc"
+    rm -vf "${srcdir}/libelf-m32/usr/lib32/libelf.a"
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/libelf-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
+}
