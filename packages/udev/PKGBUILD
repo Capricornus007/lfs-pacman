@@ -1,12 +1,18 @@
-# MLFS 8.78 Udev from Systemd-262.1 —— §8.78（三來源；meson 部分構建；64 位手裝＋32 位 lib32）
-# 這是全書最繁的一節：只取 udev，不裝 systemd 其它元件。
+# MLFS 8.78 udev-262.1 —— §8.78（三來源；meson 部分構建；64 位手裝＋32 位 lib32）
+# 零殘留政策（手冊 §7.4 規則 19）：本機／新系統／備份還原後的檔案樹中，
+# 不得出現任何上游 init 專案的目錄、檔名、包名或服務。
+#   - 本地 source 全部改名（udev-src / udev-man-pages），並用 noextract 手動解到 udev-src/，
+#     所以 $srcdir 與 $pkgdir 都不會出現上游專案名的目錄。
+#   - pkgdesc / url / 包名 / 建構目錄 / 最終安裝樹皆零該字樣。
+#   - 上游 tarball 的內部成員名與 meson 目標名無法改（書 pre 6/pre 9 釘死），
+#     但它們只在建構期存在；裝進包的檔案一律改名，並在 package() 末尾強制清理＋自檢。
 # 書在同一 build/ 裡 `rm -rf *` 重 setup，改為 build/ 與 build32/ 兩棵樹（規則 10）。
 pkgname=udev
 pkgver=262.1
 pkgrel=1
-pkgdesc="udev 裝置管理（取自 systemd，僅 udev 元件）"
+pkgdesc="udev 裝置事件守護程式與 libudev（OpenRC 系統用）"
 arch=('x86_64')
-url="https://www.freedesktop.org/wiki/Software/systemd/"
+url="https://lfs-matrix.net/mlfs/view/dev-openrc/"
 license=('LGPL-2.1-or-later' 'GPL-2.0-or-later')
 options=(!strip !debug !lto)
 # 依賴附錄 RUN=Acl, Glibc, Libcap, OpenSSL, and Util-linux（util-linux 在批次 7，規則 11）
@@ -14,29 +20,39 @@ depends=('acl' 'glibc' 'libcap' 'openssl' 'util-linux')
 makedepends=('meson' 'ninja' 'pkgconf' 'python' 'jinja2' 'gperf'
              'libcap' 'openssl' 'acl' 'util-linux')
 install=udev.install
-source=(systemd-${pkgver}.tar.gz
+# 三個來源的本地檔名皆不含上游 init 專案名；md5 與書 md5sums.html 逐字一致（只改本地名）。
+# 對應關係：udev-src-262.1.tar.gz ← 書 wget-list 的上游源碼包；
+#           udev-man-pages-262.1.tar.xz ← 書 wget-list 的預編 man 包；
+#           udev-lfs-20230818.tar.xz ← LFS udev 輔助腳本（書 wget-list 原名）。
+source=(udev-src-${pkgver}.tar.gz
         udev-lfs-20230818.tar.xz
-        systemd-man-pages-${pkgver}.tar.xz)
-noextract=(udev-lfs-20230818.tar.xz
-           systemd-man-pages-${pkgver}.tar.xz)
+        udev-man-pages-${pkgver}.tar.xz)
+noextract=(udev-src-${pkgver}.tar.gz
+           udev-lfs-20230818.tar.xz
+           udev-man-pages-${pkgver}.tar.xz)
 md5sums=('5aff3c8c8a663d4cd99d1cc89530fd09'
          'acd4360d8a5c3ef320b9db88d275dae6'
          '20c428161a5783fdc9f79a1bbb95563c')
 
 prepare() {
-    cd systemd-${pkgver}
-    # 書 8.78 pre 1–3
+    # 手動解到 udev-src/，--strip-components=1 讓頂層目錄名也不帶上游專案名
+    rm -rf udev-src; mkdir -p udev-src
+    tar --strip-components=1 -xf "${srcdir}/udev-src-${pkgver}.tar.gz" -C udev-src
+    cd udev-src
+    # 書 8.78 pre 1
     sed -e 's/GROUP="render"/GROUP="video"/' \
         -e 's/GROUP="sgx", //'               \
         -i rules.d/50-udev-default.rules.in
-    sed -i '/systemd-sysctl/s/^/#/' rules.d/99-systemd.rules.in
-    sed -e '/NETWORK_DIRS/s/systemd/udev/' \
-        -i src/libsystemd/sd-network/network-util.h
+    # 書 pre 2 處理的 99-*.rules.in 最終不進包（見 package() 的過濾），故省略該 sed。
+    # 書 pre 3：把 NETWORK_DIRS 由上游路徑改為 udev 路徑（用 find 定位，避免硬編內部目錄名）
+    local netheader
+    netheader=$(find src -path '*sd-network/network-util.h' -print -quit)
+    [ -n "$netheader" ] && sed -e '/NETWORK_DIRS/s/systemd/udev/' -i "$netheader"
     rm -rf build build32; mkdir -p build build32
 }
 
 build() {
-    cd systemd-${pkgver}/build
+    cd udev-src/build
     # 書 8.78 pre 4
     meson setup ..                  \
           --prefix=/usr             \
@@ -46,7 +62,7 @@ build() {
           -D link-udev-shared=false \
           -D logind=false           \
           -D vconsole=false
-    # 書 8.78 pre 5–6
+    # 書 8.78 pre 5–6（systemd-hwdb 是上游 meson 目標名，只存在於建構期；裝包時改名 udev-hwdb）
     export udev_helpers=$(grep "'name' :" ../src/udev/meson.build | \
                           awk '{print $3}' | tr -d ",'" | grep -v 'udevadm')
     ninja udevadm systemd-hwdb                                           \
@@ -73,7 +89,7 @@ build() {
 
 package() {
     P="${pkgdir}"
-    cd systemd-${pkgver}/build
+    cd udev-src/build
     # makepkg 的 build()／package() 是不同 shell，udev_helpers 要重算
     udev_helpers=$(grep "'name' :" ../src/udev/meson.build | \
                    awk '{print $3}' | tr -d ",'" | grep -v 'udevadm')
@@ -91,8 +107,12 @@ package() {
     install -vm644 src/libudev/*.pc         "$P/usr/lib/pkgconfig/"
     install -vm644 src/udev/*.pc            "$P/usr/share/pkgconfig/"
     install -vm644 ../src/udev/udev.conf    "$P/etc/udev/"
-    install -vm644 rules.d/* ../rules.d/README "$P/usr/lib/udev/rules.d/"
-    install -vm644 $(find ../rules.d/*.rules -not -name '*power-switch*') \
+    # 只裝 udev 自己的規則；上游 init 專案的 99-*.rules 一律不進包
+    for f in rules.d/* ../rules.d/README; do
+        case "$f" in *99-*) continue ;; esac
+        [ -f "$f" ] && install -vm644 "$f" "$P/usr/lib/udev/rules.d/"
+    done
+    install -vm644 $(find ../rules.d/*.rules -not -name '*power-switch*' -not -name '*99-*') \
         "$P/usr/lib/udev/rules.d/"
     install -vm644 hwdb.d/* ../hwdb.d/{*.hwdb,README} \
         "$P/usr/lib/udev/hwdb.d/"
@@ -106,9 +126,9 @@ package() {
         "${srcdir}/udev-lfs-extract/udev-lfs-20230818/"{init-net-rules.sh,write_net_rules,rule_generator.functions} \
         "$P/usr/lib/udev"
 
-    # 書 8.78 pre 9：預編好的 systemd man pages，只取 udev 相關並改名
+    # 書 8.78 pre 9：預編 man 頁只取 udev 相關並改名；來源改為本地名 udev-man-pages-*
     install -d "$P/usr/share/man"
-    tar -xf "${srcdir}/systemd-man-pages-${pkgver}.tar.xz"               \
+    tar -xf "${srcdir}/udev-man-pages-${pkgver}.tar.xz"                 \
         --no-same-owner --strip-components=1                              \
         -C "$P/usr/share/man" --wildcards '*/udev*' '*/libudev*'          \
                               '*/systemd.link.5'                          \
@@ -127,6 +147,15 @@ package() {
     cp -av libudev.so{,*[0-9]} "$P/usr/lib32/"
     cp src/libudev/libudev.pc  "$P/usr/lib32/pkgconfig/"
 
+    # === 零殘留驗收（規則 19）===
+    # 安裝樹內任何上游 init 專案命名的檔／目錄都清掉，清完還剩就讓打包失敗。
+    find "$P" -depth -iname '*systemd*' -exec rm -rf -- {} +
+    leftovers=$(find "$P" -iname '*systemd*' -print)
+    if [ -n "$leftovers" ]; then
+        echo "ERROR：udev 包內仍有上游 init 專案命名：" >&2
+        echo "$leftovers" >&2
+        return 1
+    fi
     # 書 8.78 pre 15 `udev-hwdb update` 是對已安裝系統產生 /etc/udev/hwdb.bin，
     # 移到 udev.install（規則 12）。
 }
