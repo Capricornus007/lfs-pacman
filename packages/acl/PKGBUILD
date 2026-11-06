@@ -1,36 +1,53 @@
+# MLFS 8.28 Acl-2.4.0 —— §8.28（64 位主裝＋32 位只取 lib32）
 pkgname=acl
-pkgver=2.2.52
+pkgver=2.4.0
 pkgrel=1
-pkgdesc="Access control list utilities, libraries and headers"
+pkgdesc="存取控制列表 (ACL) 工具與函式庫"
 arch=('x86_64')
-url="http://savannah.nongnu.org/projects/acl"
-license=('LGPL')
-source=(${pkgname}-${pkgver}.src.tar.gz)
+url="https://savannah.nongnu.org/projects/acl"
+license=('LGPL-2.1-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('e289f370161698a96f50b2a3fdadf411')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-    sed -i -e 's|/@pkg_name@|&-@pkg_version@|' include/builddefs.in
-    sed -i "s:| sed.*::g" test/{sbits-restore,cp,misc}.test
-    sed -i -e "/TABS-1;/a if (x > (TABS-1)) x = (TABS-1);" \
-	libacl/__acl_to_any_text.c
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.28 pre 1–2
     ./configure --prefix=/usr    \
-		--bindir=/bin    \
-		--disable-static \
-		--libexecdir=/usr/lib
+                --disable-static \
+                --docdir=/usr/share/doc/acl-2.4.0
+    make
+
+    cd ../build32
+    # 書 8.28 pre 6–7
+    CC="gcc -m32" ./configure   \
+        --prefix=/usr           \
+        --disable-static        \
+        --libdir=/usr/lib32     \
+        --libexecdir=/usr/lib32 \
+        --host=i686-pc-linux-gnu
     make
 }
 
-package() {
-    cd "${pkgname}-${pkgver}"
-    
-    make DIST_ROOT="$pkgdir" install install-dev install-lib
+check() {
+    cd ${pkgname}-${pkgver} && make check
+}
 
-    chmod -v 755 ${pkgdir}/usr/lib/libacl.so
-    install -vdm755 ${pkgdir}/lib
-    mv -v ${pkgdir}/usr/lib/libacl.so.* ${pkgdir}/lib
-    ln -sfv ../../lib/$(readlink ${pkgdir}/usr/lib/libacl.so) ${pkgdir}/usr/lib/libacl.so
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.28 pre 4
+    make DESTDIR="${pkgdir}" install
+
+    cd ../build32
+    # 書 8.28 pre 8
+    rm -rf "${srcdir}/acl-m32"
+    make DESTDIR="${srcdir}/acl-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -av "${srcdir}/acl-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
 }

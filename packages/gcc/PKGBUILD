@@ -1,52 +1,76 @@
+# MLFS 8.33 GCC-16.2.0 —— §8.33（multilib m64,m32 由 configure 一次搞定，不需兩棵樹）
 pkgname=gcc
-pkgver=7.2.0
+pkgver=16.2.0
 pkgrel=1
-pkgdesc="The GNU Compiler Collection"
+pkgdesc="GNU Compiler Collection（C/C++，multilib m64/m32）"
 arch=('x86_64')
-url="http://gcc.gnu.org"
-license=('GPL' 'LGPL' 'FDL' 'custom')
+url="https://gcc.gnu.org"
+license=('GPL-3.0-or-later' 'LGPL-2.1-or-later' 'FDL-1.3-or-later' 'custom')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Binutils, Glibc, Mpc, and Python（bash/python 前向依賴，規則 9/11）
+depends=('bash' 'binutils' 'glibc' 'mpc' 'python')
+# 書附錄 BUILD 中已在本書前批入帳的套件
+makedepends=('gmp' 'mpfr' 'mpc' 'isl' 'zlib' 'zstd')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('19b777fb19ea4982731392481306f0d3')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-    sed -e '/m64=/s/lib64/lib/' -i.orig gcc/config/i386/t-linux64
+    cd ${pkgname}-${pkgver}
+    # 書 8.33 pre 1–2
+    sed -e '/m64=/s/lib64/lib/' \
+        -e '/m32=/s/m32=.*/m32=..\/lib32$(call if_multiarch,:i386-linux-gnu)/' \
+        -i.orig gcc/config/i386/t-linux64
+    sed '/STACK_REALIGN_DEFAULT/s/0/(!TARGET_64BIT \&\& TARGET_SSE)/' \
+          -i gcc/config/i386/i386.h
+    # 書 8.33 pre 3；§7.4 規則 10 可重入
+    rm -rf build; mkdir -v build
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-
-    mkdir -v build
-    cd build
-
-    SED=sed
-    ../configure --prefix=/usr            \
-		--enable-languages=c,c++ \
-		--disable-multilib       \
-		--disable-bootstrap      \
-		--with-system-zlib
+    cd ${pkgname}-${pkgver}/build
+    # 書 8.33 pre 4–5
+    ../configure --prefix=/usr                \
+                 LD=ld                        \
+                 --enable-languages=c,c++     \
+                 --enable-default-pie         \
+                 --enable-default-ssp         \
+                 --enable-host-pie            \
+                 --enable-multilib            \
+                 --with-multilib-list=m64,m32 \
+                 --disable-bootstrap          \
+                 --disable-fixincludes        \
+                 --with-system-zlib
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}/build"
-    make -k check 2>&1 | tee ${pkgname}-${pkgver}-check-log
-    ../contrib/test_summary | tee ${pkgname}-${pkgver}-test-summary
+    cd ${pkgname}-${pkgver}/build
+    # 書 8.33 pre 6；pre 7 的 chown/su tester 省略（makepkg 非 root）
+    ulimit -s -H unlimited
+    make -k check
+    ../contrib/test_summary -t
 }
 
 package() {
-    cd "${pkgname}-${pkgver}/build"
+    cd ${pkgname}-${pkgver}/build
+    # 書 8.33 pre 9
+    make DESTDIR="${pkgdir}" install
 
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/lib
-    ln -sv ../usr/bin/cpp ${pkgdir}/lib
-
-    ln -sv gcc ${pkgdir}/usr/bin/cc
-
-    install -vdm755 ${pkgdir}/usr/lib/bfd-plugins
-    ln -sfv ../../libexec/gcc/$(${pkgdir}/usr/bin/gcc -dumpmachine)/${pkgver}/liblto_plugin.so \
-       ${pkgdir}/usr/lib/bfd-plugins/
-
-    install -vdm755 ${pkgdir}/usr/share/gdb/auto-load/usr/lib
-    mv -v ${pkgdir}/usr/lib/*gdb.py ${pkgdir}/usr/share/gdb/auto-load/usr/lib
+    # 書 8.33 pre 10：chown root:root 是對真系統的動作，fakeroot 下檔案已歸 root，
+    # 不放進 package()（同 §7.4 規則 12）。
+    # 書 8.33 pre 11：ln -svr /usr/bin/cpp /usr/lib
+    ln -svr "${pkgdir}/usr/bin/cpp" "${pkgdir}/usr/lib/"
+    # 書 8.33 pre 12
+    ln -sv gcc.1 "${pkgdir}/usr/share/man/man1/cc.1"
+    # 書 8.33 pre 13：書用 $(gcc -print-prog-name=liblto_plugin.so) 指向「剛裝好的 gcc」；
+    # DESTDIR 下該 gcc 尚未在 PATH，改從 $pkgdir 找出實際檔案再建相對連結。
+    plugin=$(find "${pkgdir}/usr/lib/gcc" -name liblto_plugin.so -print -quit)
+    install -vdm755 "${pkgdir}/usr/lib/bfd-plugins"
+    ln -svr "${plugin}" "${pkgdir}/usr/lib/bfd-plugins/"
+    # 書 8.33 pre 27
+    install -vdm755 "${pkgdir}/usr/share/gdb/auto-load/usr/lib"
+    mv -v "${pkgdir}/usr/lib/"*gdb.py \
+          "${pkgdir}/usr/share/gdb/auto-load/usr/lib" 2>/dev/null || true
+    # 書 8.33 pre 14–26 是「裝好後對真系統的 toolchain sanity check」，
+    # 由 §7.4 批次 3 的批末驗收點在新系統上執行，不放進 package()。
 }

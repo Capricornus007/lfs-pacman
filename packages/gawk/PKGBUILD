@@ -1,28 +1,45 @@
+# MLFS 8.32 Gawk-5.4.1 —— §8.32
 pkgname=gawk
-pkgver=4.1.4
+pkgver=5.4.1
 pkgrel=1
-pkgdesc="GNU version of awk"
+pkgdesc="GNU awk 文字處理語言"
 arch=('x86_64')
-url="http://www.gnu.org/software/gawk/"
-license=('GPL')
+url="https://www.gnu.org/software/gawk/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Glibc, and Mpfr；bash 在批次 4 才入帳（§7.4 規則 9/11）
+depends=('bash' 'glibc' 'mpfr')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('d379c2110e7a3e15347dd5559a41ad64')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.32 pre 1
+    sed -i 's/extras//' Makefile.in
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.32 pre 2–3
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 8.32 pre 4 的 chown -R tester / su tester 是「不要用 root 跑測試」；
+    # makepkg 本來就以非 root 執行，故直接 make check（不放進 scriptlet）。
+    make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/usr/share/doc/gawk-${pkgver}
-    install -vm644 doc/{awkforai.txt,*.{eps,pdf,jpg}} ${pkgdir}/usr/share/doc/gawk-${pkgver}
-
+    cd ${pkgname}-${pkgver}
+    # 書 8.32 pre 5 的 rm -f /usr/bin/gawk-5.4.1 是清真系統舊硬連結；
+    # $pkgdir 是全新目錄，無需此步驟。
+    make DESTDIR="${pkgdir}" install
+    # 書 8.32 pre 6
+    ln -sv gawk.1 "${pkgdir}/usr/share/man/man1/awk.1"
+    # 書 8.32 pre 7
+    install -vDm644 doc/{awkforai.txt,*.{eps,pdf,jpg}} \
+        -t "${pkgdir}/usr/share/doc/gawk-5.4.1"
 }

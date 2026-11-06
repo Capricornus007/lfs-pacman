@@ -1,42 +1,55 @@
+# MLFS 8.27 Attr-2.6.0 —— §8.27（64 位主裝＋32 位只取 lib32）
 pkgname=attr
-pkgver=2.4.47
+pkgver=2.6.0
 pkgrel=1
-pkgdesc="Extended attribute support library for ACL support"
+pkgdesc="延伸屬性 (xattr) 工具與函式庫"
 arch=('x86_64')
-url="http://savannah.nongnu.org/projects/attr"
-license=('LGPL')
-source=(${pkgname}-${pkgver}.src.tar.gz)
+url="https://savannah.nongnu.org/projects/attr"
+license=('LGPL-2.1-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('910a09c3ae0a211569d180586371cf7e')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-
-    sed -i -e 's|/@pkg_name@|&-@pkg_version@|' include/builddefs.in
-
-    sed -i -e "/SUBDIRS/s|man[25]||g" man/Makefile
-
-    sed -i 's:{(:\\{(:' test/run
+    # 兩棵構建樹；書用 distclean 重來，改用副本（§7.4 規則 10 可重入）
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr \
-		--bindir=/bin \
-		--disable-static
+    cd ${pkgname}-${pkgver}
+    # 書 8.27 pre 1–2
+    ./configure --prefix=/usr     \
+                --disable-static  \
+                --sysconfdir=/etc \
+                --docdir=/usr/share/doc/attr-2.6.0
+    make
+
+    cd ../build32
+    # 書 8.27 pre 6–7
+    CC="gcc -m32" ./configure \
+        --prefix=/usr         \
+        --disable-static      \
+        --sysconfdir=/etc     \
+        --libdir=/usr/lib32   \
+        --host=i686-pc-linux-gnu
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make -j1 tests root-tests 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    
-    make DIST_ROOT=${pkgdir} install install-dev install-lib
-    chmod -v 755 ${pkgdir}/usr/lib/libattr.so
-    
-    install -vdm755 ${pkgdir}/lib
-    mv -v ${pkgdir}/usr/lib/libattr.so.* ${pkgdir}/lib
-    ln -sfv ../../lib/$(readlink ${pkgdir}/usr/lib/libattr.so) ${pkgdir}/usr/lib/libattr.so
+    cd ${pkgname}-${pkgver}
+    # 書 8.27 pre 4：make install → DESTDIR 化
+    make DESTDIR="${pkgdir}" install
+
+    cd ../build32
+    # 書 8.27 pre 8：32 位只取 lib32（不可整樹蓋掉 64 位檔案）
+    rm -rf "${srcdir}/attr-m32"
+    make DESTDIR="${srcdir}/attr-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -av "${srcdir}/attr-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
 }

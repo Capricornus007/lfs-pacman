@@ -1,37 +1,53 @@
+# MLFS 8.31 Shadow-4.20.3 —— §8.31（系統配置步驟放 .install，不進 package()）
 pkgname=shadow
-pkgver=4.5
+pkgver=4.20.3
 pkgrel=1
-pkgdesc="Password and account management tool suite with support for shadow files and PAM"
+pkgdesc="密碼與帳號管理工具組（YESCRYPT，含 libxcrypt）"
 arch=('x86_64')
 url="https://github.com/shadow-maint/shadow"
-license=('BSD')
-source=(${pkgname}-${pkgver}.tar.xz)
+license=('BSD-3-Clause' 'GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Libxcrypt
+depends=('glibc' 'libxcrypt')
 install=shadow.install
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('dd905c09b339e825b21512df7ba49063')
+backup=(etc/login.defs)
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-
-    sed -i 's/groups$(EXEEXT) //' src/Makefile.in
-    find man -name Makefile.in -exec sed -i 's/groups\.1 / /'   {} \;
+    cd ${pkgname}-${pkgver}
+    # 書 8.31 pre 1：避免覆蓋 man-pages 已裝的兩頁
     find man -name Makefile.in -exec sed -i 's/getspnam\.3 / /' {} \;
     find man -name Makefile.in -exec sed -i 's/passwd\.5 / /'   {} \;
-
-    sed -i -e 's@#ENCRYPT_METHOD DES@ENCRYPT_METHOD SHA512@' \
-	-e 's@/var/spool/mail@/var/mail@' etc/login.defs
-
-    sed -i 's/1000/999/' etc/useradd
+    # 書 8.31 pre 2：YESCRYPT、/var/mail、PATH 去掉 /bin /sbin
+    sed -e 's:#ENCRYPT_METHOD SHA512:ENCRYPT_METHOD YESCRYPT:' \
+        -e 's:/var/spool/mail:/var/mail:'                      \
+        -e '/PATH=/{s@/sbin:@@;s@/bin:@@}'                     \
+        -i etc/login.defs
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --sysconfdir=/etc --with-group-name-max-length=32
+    cd ${pkgname}-${pkgver}
+    # 書 8.31 pre 3（touch /usr/bin/passwd 是對真系統的動作；
+    # 純 DESTDIR 構建改在 package() 的 $pkgdir 內建占位檔，見 §7.4 規則 12）
+    ./configure --sysconfdir=/etc   \
+                --disable-static    \
+                --with-{b,yes}crypt \
+                --without-libbsd    \
+                --disable-logind    \
+                --with-group-name-max-length=32
     make
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/passwd ${pkgdir}/bin
+    cd ${pkgname}-${pkgver}
+    # 書 8.31 pre 3 的 touch：讓安裝腳本把 passwd 建在正确位置
+    install -d "${pkgdir}/usr/bin"
+    touch "${pkgdir}/usr/bin/passwd"
+    # 書 8.31 pre 5
+    make exec_prefix=/usr DESTDIR="${pkgdir}" install
+    make -C man DESTDIR="${pkgdir}" install-man
+    # 書 8.31 pre 6–11（pwconv/grpconv/useradd/subuid/subgid/passwd root）
+    # 全部是對「運行中系統」的配置，移到 shadow.install；
+    # 其中 passwd root 為互動式，必須由操作者在首次開機前手動執行。
 }

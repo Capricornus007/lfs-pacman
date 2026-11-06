@@ -1,4 +1,23 @@
-post_install() {
+# MLFS 8.31 的系統配置步驟（書 pre 6–11）
+# 這些動作的對象是「安裝後的 /etc」，不是 $pkgdir，故只能在 pacman 安裝時執行。
+# 注意：書 pre 11 的 `passwd root` 是互動式指令，故意不放進 scriptlet——
+#       必須由操作者在首次開機前手動設定 root 密碼（手冊 §8.3／§9 已列為開機前檢查）。
+
+_shadow_setup() {
     pwconv
     grpconv
+
+    mkdir -p /etc/default
+    useradd -D --gid 999
+    sed -i '/MAIL/s/yes/no/' /etc/default/useradd
+
+    touch /etc/subuid /etc/subgid
+}
+
+post_install() {
+    _shadow_setup
+}
+
+post_upgrade() {
+    _shadow_setup
 }
