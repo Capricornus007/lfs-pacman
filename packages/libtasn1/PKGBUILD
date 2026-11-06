@@ -1,0 +1,30 @@
+# BLFS libtasn1-4.21.0 —— §7.2 安全 HTTPS 鏈第 1 件（離線書 general/libtasn1.html）
+pkgname=libtasn1
+pkgver=4.21.0
+pkgrel=1
+pkgdesc="ASN.1 編解碼函式庫"
+arch=('x86_64')
+url="https://www.gnu.org/software/libtasn1/"
+license=('GPL-3.0-or-later' 'LGPL-2.1-or-later')
+options=(!strip !debug !lto)
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('2ee1d9f3aa66f1e308c46a283aa9a8c2')
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 1
+    ./configure --prefix=/usr --disable-static
+    make
+}
+
+check() {
+    cd ${pkgname}-${pkgver} && make check
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 2–3
+    make DESTDIR="${pkgdir}" install
+    make -C doc/reference DESTDIR="${pkgdir}" install-data-local
+}

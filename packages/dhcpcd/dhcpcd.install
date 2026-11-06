@@ -1,0 +1,16 @@
+# BLFS §5.3 / §7.2 首次連網：啟用 dhcpcd 服務
+# 書 basicnet/dhcpcd.html pre 5 尾 `rc-update add dhcpcd default`，
+# 作用對象是已安裝系統的 OpenRC 設定，純 DESTDIR 打包做不到（規則 12/16）。
+_dhcpcd_enable() {
+    if command -v rc-update >/dev/null 2>&1; then
+        rc-update add dhcpcd default || true
+    fi
+}
+
+post_install() {
+    _dhcpcd_enable
+}
+
+post_upgrade() {
+    _dhcpcd_enable
+}

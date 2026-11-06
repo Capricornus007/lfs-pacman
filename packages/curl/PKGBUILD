@@ -1,0 +1,39 @@
+# BLFS cURL-8.19.0 —— §7.2 HTTPS 鏈第 5 件（離線書 basicnet/curl.html）
+pkgname=curl
+pkgver=8.19.0
+pkgrel=1
+pkgdesc="命令列 URL 傳輸工具與 libcurl"
+arch=('x86_64')
+url="https://curl.se/"
+license=('custom:curl')
+options=(!strip !debug !lto)
+depends=('glibc' 'openssl' 'libpsl' 'make-ca' 'zlib')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('d5d3581ba4b4df1140a26a6efcf13e61')
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 1
+    ./configure --prefix=/usr    \
+                --disable-static \
+                --with-openssl   \
+                --with-ca-path=/etc/ssl/certs
+    make
+}
+
+check() {
+    cd ${pkgname}-${pkgver} && make test
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 2
+    make DESTDIR="${pkgdir}" install
+    rm -rf docs/examples/.deps
+    find docs \( -name Makefile\* -o  \
+                 -name \*.1       -o  \
+                 -name \*.3       -o  \
+                 -name CMakeLists.txt \) -delete
+    install -d "${pkgdir}/usr/share/doc/curl-8.19.0"
+    cp -v -R docs/. "${pkgdir}/usr/share/doc/curl-8.19.0/"
+}

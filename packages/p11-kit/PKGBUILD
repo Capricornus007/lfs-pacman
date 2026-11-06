@@ -1,0 +1,51 @@
+# BLFS p11-kit-0.26.2 —— §7.2 HTTPS 鏈第 2 件（離線書 postlfs/p11-kit.html）
+pkgname=p11-kit
+pkgver=0.26.2
+pkgrel=1
+pkgdesc="PKCS#11 模組管理與信任錨點函式庫"
+arch=('x86_64')
+url="https://p11-glue.github.io/p11-glue/p11-kit.html"
+license=('BSD-3-Clause')
+options=(!strip !debug !lto)
+depends=('glibc' 'libtasn1')
+makedepends=('meson' 'ninja' 'pkgconf')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('99edde5f38697ed2d47c55544347be4e')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 1：截斷相容腳本並接上 make-ca 的信任更新
+    sed '20,$ d' -i trust/trust-extract-compat
+    cat >> trust/trust-extract-compat << "EOF"
+# Copy existing anchor modifications to /etc/ssl/local
+/usr/libexec/make-ca/copy-trust-modifications
+
+# Update trust stores
+/usr/sbin/make-ca -r
+EOF
+    rm -rf p11-build; mkdir p11-build
+}
+
+build() {
+    cd ${pkgname}-${pkgver}/p11-build
+    # 書 pre 2
+    meson setup ..            \
+          --prefix=/usr       \
+          --buildtype=release \
+          -D trust_paths=/etc/pki/anchors
+    ninja
+}
+
+check() {
+    cd ${pkgname}-${pkgver}/p11-build && ninja test
+}
+
+package() {
+    cd ${pkgname}-${pkgver}/p11-build
+    # 書 pre 3–4；規則 10：DESTDIR 前置為環境變數
+    DESTDIR="${pkgdir}" ninja install
+    install -d "${pkgdir}/usr/bin" "${pkgdir}/usr/lib"
+    ln -sfv /usr/libexec/p11-kit/trust-extract-compat \
+        "${pkgdir}/usr/bin/update-ca-certificates"
+    ln -sfv ./pkcs11/p11-kit-trust.so "${pkgdir}/usr/lib/libnssckbi.so"
+}

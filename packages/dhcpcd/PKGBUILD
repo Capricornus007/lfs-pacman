@@ -1,0 +1,65 @@
+# BLFS dhcpcd-10.3.0 —— §5.3 首次連網（離線書 basicnet/dhcpcd.html）
+# 書 pre 2／pre 3 是二選一：pre 3 要先 groupadd/useradd dhcpcd（privsep）。
+# 手冊 §5.3 明確「dhcpcd 無相依」，故選 pre 2 的 --disable-privsep，bootstrap 階段最省事。
+pkgname=dhcpcd
+pkgver=10.3.0
+pkgrel=1
+pkgdesc="DHCP 用戶端（首次開機手機 USB 網路共享用）"
+arch=('x86_64')
+url="https://github.com/NetworkConfiguration/dhcpcd"
+license=('BSD-2-Clause')
+options=(!strip !debug !lto)
+depends=('glibc')
+install=dhcpcd.install
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('07d4b32791b52bc49d2a1677c7a2804e')
+backup=(etc/conf.d/dhcpcd)
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 2
+    ./configure --prefix=/usr                \
+                --sysconfdir=/etc            \
+                --libexecdir=/usr/lib/dhcpcd \
+                --dbdir=/var/lib/dhcpcd      \
+                --runstatedir=/run           \
+                --disable-privsep
+    make
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 4
+    make DESTDIR="${pkgdir}" install
+    # 書 pre 5：OpenRC init 腳本（新建立的配置檔，作用對象可落在 $pkgdir）
+    install -vDm755 /dev/stdin "${pkgdir}/etc/init.d/dhcpcd" << "EOF"
+#!/sbin/openrc-run
+# Starts the dhcpcd daemon.
+# Authors: Zeckma - zeckma.tech@gmail.com
+# Version: LFS r13.0-194
+
+description="starts dhcpcd"
+
+command=/sbin/dhcpcd
+pidfile=/var/run/dhcpcd.pid
+command_args="-B -q ${dhcpcd_options} ${iface}"
+command_background=yes
+
+depend() {
+  provide net
+  need localmount
+  use logger
+  after bootmisc modules
+  before dns
+}
+EOF
+    # 書 pre 6
+    install -d "${pkgdir}/etc/conf.d"
+    cat > "${pkgdir}/etc/conf.d/dhcpcd" << "EOF"
+iface="<interface>"
+dhcpcd_options=""
+EOF
+    # 書 pre 5 尾的 `rc-update add dhcpcd default` → .install（規則 12/16）
+    # 書 pre 7（靜態 IP）與 pre 8（resolv.conf.head 的 OpenDNS）是站台專屬設定，
+    # 屬操作者動作，見手冊 §7.4 規則 12 清單。
+}

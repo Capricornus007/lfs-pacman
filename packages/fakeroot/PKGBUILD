@@ -1,36 +1,39 @@
+# BLFS fakeroot-2.1.4 —— §7.2 makepkg 無條件需求
+# ⚠️ 這份不是上游 release tarball，也沒有離線 BLFS 書頁。
+#    來源是手冊 §5.3 pin 的 git 物件 860de25c31d648e04a8264489f924cc18a4717b5
+#    （salsa.debian.org/clint/fakeroot.git tag upstream/2.1.4）所產生的固定快照，
+#    已於 2026-11-06 在本機實際生成、算出 sha256，並存進備份盤
+#    bootstrap-sources/fakeroot-2.1.4.tar.xz（連同 SHA256SUMS 一行）。
+#    這樣 live USB 不必重新生成，也不會因 xz 版本不同而校驗失敗。
+# 建置命令取自該 pin 快照自己的 INSTALL.md（meson 段）與 meson_options.txt，
+#    -D docs=false 關掉 po4a 轉譯手冊（MLFS 沒有 po4a）。
 pkgname=fakeroot
-pkgver=1.22
-pkgrel=2
-pkgdesc="Tool for simulating superuser privileges"
+pkgver=2.1.4
+pkgrel=1
+pkgdesc="模擬 root 權限以打包（makepkg 的無條件工具）"
 arch=('x86_64')
-url="http://turul.canonical.com/pool/main/f/fakeroot/"
-license=('GPL')
-source=(${pkgname}_${pkgver}.orig.tar.bz2
-	silence-dlerror.patch)
-
-prepare() {
-    cd "${pkgname}-${pkgver}"
-    patch -p1 -i "$srcdir"/silence-dlerror.patch
-}
+url="https://salsa.debian.org/clint/fakeroot"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+depends=('glibc')
+makedepends=('meson' 'ninja' 'pkgconf')
+source=(fakeroot-${pkgver}.tar.xz)
+sha256sums=('42b7e967ddf3b6f24f2cb6d7f60ac440084b31ec390613ace8123a127015b4a6')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr \
-		--libdir=/usr/lib/libfakeroot \
-		--disable-static \
-		--with-ipc=sysv
-    make
+    cd fakeroot-${pkgver}
+    # pin 快照 INSTALL.md：meson setup -D ipc=tcp build
+    rm -rf build
+    meson setup -D ipc=tcp -D docs=false build
+    meson compile -C build
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd fakeroot-${pkgver} && meson test -C build
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -dm755 "${pkgdir}/etc/ld.so.conf.d/"
-    echo '/usr/lib/libfakeroot' > "${pkgdir}/etc/ld.so.conf.d/fakeroot.conf"
+    cd fakeroot-${pkgver}
+    # INSTALL.md：meson install -C build（DESTDIR 前置，規則 10 同理）
+    DESTDIR="${pkgdir}" meson install -C build --no-rebuild
 }

@@ -1,0 +1,32 @@
+# BLFS libpsl-0.21.5 —— §7.2 HTTPS 鏈第 4 件（離線書 basicnet/libpsl.html）
+pkgname=libpsl
+pkgver=0.21.5
+pkgrel=1
+pkgdesc="Public Suffix List 查询函式库（cURL 安全必要）"
+arch=('x86_64')
+url="https://rockdaboot.github.io/libpsl/"
+license=('MIT')
+options=(!strip !debug !lto)
+depends=('glibc')
+makedepends=('meson' 'ninja' 'pkgconf' 'python')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('870a798ee9860b6e77896548428dba7b')
+
+build() {
+    cd ${pkgname}-${pkgver}
+    rm -rf build; mkdir build
+    cd build
+    # 書 pre 1
+    meson setup --prefix=/usr --buildtype=release ..
+    ninja
+}
+
+check() {
+    cd ${pkgname}-${pkgver}/build && ninja test
+}
+
+package() {
+    cd ${pkgname}-${pkgver}/build
+    # 書 pre 2；規則 10
+    DESTDIR="${pkgdir}" ninja install
+}

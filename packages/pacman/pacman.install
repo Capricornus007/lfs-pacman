@@ -1,0 +1,17 @@
+# 手冊 §7.2 建置 pacman 後的系統動作：建立 DownloadUser = alpm 專用帳號
+# 書／手冊原文：useradd -r -M -d /var/empty -s /sbin/nologin alpm
+# 7.x 的 DownloadUser 不會自動建帳號，MLFS 書也不會幫你建（手冊 §7.1）。
+# 作用對象是系統帳號庫，純 DESTDIR 打包做不到，故歸 .install（規則 12/16）。
+_pacman_add_alpm_user() {
+    if ! getent passwd alpm >/dev/null 2>&1; then
+        useradd -r -M -d /var/empty -s /sbin/nologin alpm 2>/dev/null || true
+    fi
+}
+
+post_install() {
+    _pacman_add_alpm_user
+}
+
+post_upgrade() {
+    _pacman_add_alpm_user
+}

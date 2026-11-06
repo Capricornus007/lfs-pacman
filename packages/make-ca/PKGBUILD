@@ -1,0 +1,46 @@
+# BLFS make-ca-1.16.1 —— §7.2 HTTPS 鏈第 3 件（離線書 postlfs/make-ca.html）
+# 已實測：本版 Makefile 支援 DESTDIR（install_bin/man/conf 全用 $(DESTDIR)），
+# 且 §5.3 的 md5 bf9cea2d… 於 2026-11-06 實際下載核對通過。
+# `make-ca -g` 需連網抓 Mozilla certdata.txt，屬 live USB／手機共享的操作者動作（規則 12），
+# 不能放進 package() 或 .install；見手冊 §7.2 的 CA 雞生蛋解法。
+pkgname=make-ca
+pkgver=1.16.1
+pkgrel=1
+pkgdesc="由 Mozilla certdata 產生系統 CA 信任包"
+arch=('x86_64')
+url="https://github.com/lfs-book/make-ca"
+license=('MIT')
+options=(!strip !debug !lto)
+depends=('glibc' 'openssl' 'p11-kit')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('bf9cea2d24fc5344d4951b49f275c595')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 1
+    sed '/mktemp/s/-t //' -i make-ca
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    # 書 pre 2
+    make DESTDIR="${pkgdir}" install
+    install -vdm755 "${pkgdir}/etc/ssl/local"
+    # 書 pre 4：每週更新腳本
+    install -d "${pkgdir}/etc/cron.weekly"
+    cat > "${pkgdir}/etc/cron.weekly/update-pki.sh" << "EOF"
+#!/bin/bash
+/usr/sbin/make-ca -g
+EOF
+    chmod 754 "${pkgdir}/etc/cron.weekly/update-pki.sh"
+    # 書 pre 8：pip/Python 用的 CA 環境變數
+    install -d "${pkgdir}/etc/profile.d"
+    cat > "${pkgdir}/etc/profile.d/pythoncerts.sh" << "EOF"
+# Begin /etc/profile.d/pythoncerts.sh
+
+export _PIP_STANDALONE_CERT=/etc/pki/tls/certs/ca-bundle.crt
+
+# End /etc/profile.d/pythoncerts.sh
+EOF
+    # 書 pre 5／6（CAcert 憑證、停用 Makebelieve CA）是站台專屬設定，屬操作者動作。
+}

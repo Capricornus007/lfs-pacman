@@ -1,30 +1,30 @@
+# BLFS libarchive-3.8.6 —— §7.2 pacman/makepkg 核心（離線書 general/libarchive.html）
 pkgname=libarchive
-pkgver=3.3.2
+pkgver=3.8.6
 pkgrel=1
-pkgdesc="library that can create and read several streaming archive formats"
+pkgdesc="多格式串流封裝讀寫函式庫（libalpm／bsdtar 用）"
 arch=('x86_64')
-url="http://libarchive.org/"
-license=('BSD')
-source=(${pkgname}-${pkgver}.tar.gz)
-
-prepare() {
-    cd "${pkgname}-${pkgver}"
-}
+url="https://www.libarchive.org/"
+license=('BSD-2-Clause' 'BSD-3-Clause' 'MIT')
+options=(!strip !debug !lto)
+depends=('bzip2' 'glibc' 'openssl' 'xz' 'zlib' 'zstd')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('cc93976c9b7db628a1b92a337a5def56')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr  \
-		--without-xml2 \
-		--disable-static
+    cd ${pkgname}-${pkgver}
+    # 書 pre 1
+    ./configure --prefix=/usr --disable-static
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 pre 2–3
+    make DESTDIR="${pkgdir}" install
+    ln -sfv bsdunzip "${pkgdir}/usr/bin/unzip"
 }
