@@ -1,0 +1,47 @@
+# MLFS 8.18 Expect-5.45.4 —— §8.18；無舊模板自寫（含 gcc15 補丁）
+pkgname=expect
+pkgver=5.45.4
+pkgrel=1
+pkgdesc="自動化交互程序工具（Tcl 擴展）"
+arch=('x86_64')
+url="https://core.tcl-lang.org/expect/"
+license=('custom:EXPECT')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Tcl
+depends=('glibc' 'tcl')
+source=(expect${pkgver}.tar.gz
+        expect-${pkgver}-gcc15-1.patch)
+md5sums=('00fce8de158422f5ccd2666512329bd2'
+         '0ca4d6bb8d572fbcdb13cb36cd34833e')
+
+prepare() {
+    cd expect${pkgver}
+    # 書 8.18.1：gcc15 補丁
+    patch -Np1 -i "../expect-${pkgver}-gcc15-1.patch"
+}
+
+build() {
+    cd expect${pkgver}
+    # 書 8.18.1 configure 原文
+    #   （書節首的 python3 pty 檢查是宿主環境自檢，非構建命令；makepkg 環境由
+    #    fakeroot 提供 pty，且 python 不在帳本，不納入）
+    ./configure --prefix=/usr           \
+                --with-tcl=/usr/lib     \
+                --enable-shared         \
+                --disable-rpath         \
+                --mandir=/usr/share/man \
+                --with-tclinclude=/usr/include
+    make
+}
+
+check() {
+    cd expect${pkgver} && make test
+}
+
+package() {
+    cd expect${pkgver}
+    make DESTDIR="${pkgdir}" install
+    # 書 8.18.1：ln -svf expect5.45.4/libexpect5.45.4.so /usr/lib
+    #   （libexpect 裝在 /usr/lib/expect5.45.4/ 下，頂層符號連結進包）
+    ln -svf expect5.45.4/libexpect5.45.4.so "${pkgdir}/usr/lib"
+}

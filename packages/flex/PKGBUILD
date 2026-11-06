@@ -1,27 +1,34 @@
+# MLFS 8.16 Flex-2.6.4 —— §8.16；轉換規則見手冊 §7.4
 pkgname=flex
 pkgver=2.6.4
 pkgrel=1
-pkgdesc="A tool for generating text-scanning programs"
+pkgdesc="詞法分析器生成器（lex 兼容）"
 arch=('x86_64')
 url="https://github.com/westes/flex"
-license=('custom')
+license=('BSD-2-Clause' 'LGPL-2.1-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Glibc, and M4；bash 為底座工具不入帳
+depends=('glibc' 'm4')
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('2882e3179748cc9f9c23ec593d6adc8d')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-
-    HELP2MAN=/tools/bin/true \
-        ./configure --prefix=/usr --docdir=/usr/share/doc/flex-2.6.3
+    cd ${pkgname}-${pkgver}
+    # 書 8.16 原文（chroot 內已無 /tools，舊模板的 HELP2MAN hack 不再需要）
+    ./configure --prefix=/usr    \
+                --disable-static \
+                --docdir=/usr/share/doc/flex-2.6.4
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    ln -sv flex ${pkgdir}/usr/bin/lex
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
+    # 書 8.16：lex 兩個符號連結（規則 §7.4-5：進包，不用 --force）
+    ln -sv flex "${pkgdir}/usr/bin/lex"
+    ln -sv flex.1 "${pkgdir}/usr/share/man/man1/lex.1"
 }

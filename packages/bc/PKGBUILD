@@ -1,44 +1,29 @@
+# MLFS 8.15 Bc-7.0.3 —— §8.15；新版為 Gavin Howard bc（與舊模板 1.07.1 完全不同構建系統）
 pkgname=bc
-pkgver=1.07.1
+pkgver=7.0.3
 pkgrel=1
-pkgdesc="An arbitrary precision calculator language"
+pkgdesc="任意精度計算器語言（Gavin Howard bc）"
 arch=('x86_64')
-url="https://www.gnu.org/software/bc/"
-license=('GPL')
-source=(${pkgname}-${pkgver}.tar.gz)
-
-prepare() {
-    cd "${pkgname}-${pkgver}"
-    cat > bc/fix-libmath_h << "EOF"
-#! /bin/bash
-sed -e '1   s/^/{"/' \
-    -e     's/$/",/' \
-    -e '2,$ s/^/"/'  \
-    -e   '$ d'       \
-    -i libmath.h
-
-sed -e '$ s/$/0}/' \
-    -i libmath.h
-EOF
-
-    sed -i -e '/flex/s/as_fn_error/: ;; # &/' configure
-}
+url="https://git.gavinhoward.com/gavin/bc"
+license=('BSD-2-Clause')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc, Ncurses, and Readline；ncurses 前向依賴同 readline（規則 §7.4-9）
+depends=('glibc' 'ncurses' 'readline')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('ad4db5a0eb4fdbb3f6813be4b6b3da74')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr           \
-		--with-readline         \
-		--mandir=/usr/share/man \
-		--infodir=/usr/share/info
+    cd ${pkgname}-${pkgver}
+    # 書 8.15 原文
+    CC='gcc -std=c99' ./configure --prefix=/usr -G -O3 -r
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    echo "quit" | ./bc/bc -l Test/checklib.b 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make test
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
 }

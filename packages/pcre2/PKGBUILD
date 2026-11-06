@@ -1,0 +1,62 @@
+# MLFS 8.13 Pcre2-10.49 —— §8.13（multilib：lib + lib32）；無舊模板，依 §7.4 轉換規則自寫
+pkgname=pcre2
+pkgver=10.49
+pkgrel=1
+pkgdesc="Perl 兼容正則庫 2（MLFS multilib）"
+arch=('x86_64')
+url="https://www.pcre.org/"
+license=('BSD-3-Clause')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc；BUILD 另用 Zlib/Bzip2（pcre2grep）與 Readline（pcre2test），
+# 三者在帳本中均已入帳（批次 1 與本批 8.12），按真實依賴寫
+depends=('glibc' 'zlib' 'bzip2' 'readline')
+source=(${pkgname}-${pkgver}.tar.bz2)
+md5sums=('7b8509249cbd23ea76b6437bcce9be94')
+
+prepare() {
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+}
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.13.1 configure 原文
+    ./configure --prefix=/usr                       \
+                --docdir=/usr/share/doc/pcre2-10.49 \
+                --enable-unicode                    \
+                --enable-jit                        \
+                --enable-pcre2-16                   \
+                --enable-pcre2-32                   \
+                --enable-pcre2grep-libz             \
+                --enable-pcre2grep-libbz2           \
+                --enable-pcre2test-libreadline      \
+                --disable-static
+    make
+    cd ../build32
+    # 書 8.13.2 configure 原文
+    CC="gcc -m32" CXX="g++ -m32"               \
+    ./configure --prefix=/usr                  \
+                --libdir=/usr/lib32            \
+                --host=i686-pc-linux-gnu       \
+                --enable-unicode               \
+                --enable-jit                   \
+                --enable-pcre2-16              \
+                --enable-pcre2-32              \
+                --enable-pcre2grep-libz        \
+                --enable-pcre2grep-libbz2      \
+                --enable-pcre2test-libreadline \
+                --disable-static
+    make
+}
+
+check() {
+    # 書 8.13.1：make check（64 位）
+    cd ${pkgname}-${pkgver} && make check
+}
+
+package() {
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
+    # 書 8.13.2：make DESTDIR=$PWD/DESTDIR install → cp DESTDIR/usr/lib32/* /usr/lib32
+    cd ../build32
+    make DESTDIR="${pkgdir}" install
+}

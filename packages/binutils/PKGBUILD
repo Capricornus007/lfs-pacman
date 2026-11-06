@@ -1,36 +1,47 @@
+# MLFS 8.22 Binutils-2.47 —— §8.22；轉換規則見手冊 §7.4
 pkgname=binutils
-pkgver=2.29
+pkgver=2.47
 pkgrel=1
-pkgdesc="A set of programs to assemble and manipulate binary and object files"
+pkgdesc="彙編/連結/二進位操作工具集（as、ld、ar 等）"
 arch=('x86_64')
-url="http://www.gnu.org/software/binutils/"
-license=('GPL')
-backup=()
-source=(${pkgname}-${pkgver}.tar.bz2)
+url="https://www.gnu.org/software/binutils/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc, Zlib, and Zstd（--with-system-zlib）
+depends=('glibc' 'zlib' 'zstd')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('d772acfbd55a81644e9fe7b8189cd2a5')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-
-    mkdir -v build
+    cd ${pkgname}-${pkgver}
+    # 書 8.22.1：out-of-tree 構建
+    rm -rf build; mkdir -pv build
     cd build
-
     ../configure --prefix=/usr       \
-		 --enable-gold       \
-		 --enable-ld=default \
-		 --enable-plugins    \
-		 --enable-shared     \
-		 --disable-werror    \
-		 --with-system-zlib
-
+                 --sysconfdir=/etc   \
+                 --enable-ld=default \
+                 --enable-plugins    \
+                 --enable-shared     \
+                 --disable-werror    \
+                 --enable-64-bit-bfd \
+                 --enable-new-dtags  \
+                 --with-system-zlib  \
+                 --with-lib-path=/usr/lib \
+                 --enable-default-hash-style=gnu
     make tooldir=/usr
 }
 
 check() {
-   cd "${pkgname}-${pkgver}/build"
-   make -k check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    # 書 8.22.1：make -k check；grep '^FAIL:' 供人工核對（書點名者之外任何 FAIL 都要查）
+    cd ${pkgname}-${pkgver}/build
+    make -k check
+    grep '^FAIL:' $(find -name '*.log') || true
 }
 
 package() {
-    cd "${pkgname}-${pkgver}/build"
-    make prefix=${pkgdir}/usr tooldir=${pkgdir}/usr install
+    cd ${pkgname}-${pkgver}/build
+    make tooldir=/usr DESTDIR="${pkgdir}" install
+    # 書 8.22.1：六個靜態庫＋gprofng doc 不進包（rm 的 DESTDIR 等價）
+    rm -rfv "${pkgdir}/usr/lib/lib{bfd,ctf,ctf-nobfd,gprofng,opcodes,sframe}.a" \
+            "${pkgdir}/usr/share/doc/gprofng/"
 }

@@ -1,0 +1,67 @@
+# MLFS 8.21 Pkgconf-3.0.10 —— §8.21（meson 嵌入式構建＋multilib personality）；pkgconf 由舊 pkg-config 改名沿用
+pkgname=pkgconf
+pkgver=3.0.10
+pkgrel=1
+pkgdesc="包編譯/連結參數查詢器（pkg-config 兼容）"
+arch=('x86_64')
+url="https://pkgconf.org/"
+license=('ISC')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc；meson-1.12.1 嵌入 source 以書 8.21 原法調用
+depends=('glibc')
+makedepends=('ninja' 'python')
+provides=('pkg-config')
+source=(${pkgname}-${pkgver}.tar.xz
+        meson-1.12.1.tar.gz)
+md5sums=('a825346f51f1ca2f09dddf891e6d1e3c'
+         'c6eb71722ba220419cbebab8b1bd895f')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.21.1：刪掉依賴宿主環境的測試段（照抄）
+    sed '/^test_api_util_exe/,/^test(.*test_api_util_exe)/d' -i meson.build
+}
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.21.1：解 meson 源 → python3 meson.py setup → ninja
+    tar -xf "${srcdir}/meson-1.12.1.tar.gz"
+    rm -rf build; mkdir build
+    cd build
+    python3 ../meson-1.12.1/meson.py setup --prefix=/usr --buildtype=release ..
+    ninja
+}
+
+check() {
+    cd ${pkgname}-${pkgver}/build && ninja test
+}
+
+package() {
+    cd ${pkgname}-${pkgver}/build
+    DESTDIR="${pkgdir}" ninja install
+    # 書 8.21.1：mv doc 重命名（pkgconf 的 meson install 產 doc/pkgconf/）
+    if [ -d "${pkgdir}/usr/share/doc/pkgconf" ]; then
+        mv "${pkgdir}/usr/share/doc/pkgconf" "${pkgdir}/usr/share/doc/pkgconf-3.0.10"
+    fi
+    # 書 8.21.1：pkg-config 三個符號連結（規則 §7.4-5：進包）
+    ln -sv pkgconf "${pkgdir}/usr/bin/pkg-config"
+    ln -sv pkgconf.1 "${pkgdir}/usr/share/man/man1/pkg-config.1"
+    ln -sv pkgconf "${pkgdir}/usr/bin/i686-pc-linux-gnu-pkg-config"
+    ln -sv pkgconf "${pkgdir}/usr/bin/x86_64-pc-linux-gnu-pkg-config"
+    # 書 8.21.1：multilib personality 兩份（heredoc 進包）
+    install -d "${pkgdir}/usr/share/pkgconfig/personality.d"
+    cat > "${pkgdir}/usr/share/pkgconfig/personality.d/i686-pc-linux-gnu.personality" << EOF
+Triplet: i686-pc-linux-gnu
+SysrootDir: /
+DefaultSearchPaths: /usr/lib32/pkgconfig:/usr/share/pkgconfig
+SystemIncludePaths: /usr/include
+SystemLibraryPaths: /usr/lib32
+EOF
+    cat > "${pkgdir}/usr/share/pkgconfig/personality.d/x86_64-pc-linux-gnu.personality" << EOF
+Triplet: x86_64-pc-linux-gnu
+SysrootDir: /
+DefaultSearchPaths: /usr/lib/pkgconfig:/usr/share/pkgconfig
+SystemIncludePaths: /usr/include
+SystemLibraryPaths: /usr/lib
+EOF
+}

@@ -1,29 +1,34 @@
+# MLFS 8.24 MPFR-4.2.2 —— §8.24；轉換規則見手冊 §7.4
 pkgname=mpfr
-pkgver=3.1.5
+pkgver=4.2.2
 pkgrel=1
-pkgdesc="Multiple-precision floating-point library"
+pkgdesc="多精度浮點庫（MLFS multilib 基座）"
 arch=('x86_64')
-url="http://www.mpfr.org/"
-license=('LGPL')
+url="https://www.mpfr.org/"
+license=('LGPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and GMP
+depends=('glibc' 'gmp')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('7c32c39b8b6e3ae85f25156228156061')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.24 原文
     ./configure --prefix=/usr        \
-		--disable-static     \
-		--enable-thread-safe \
-		--docdir=/usr/share/doc/mpfr-3.1.5
+                --disable-static     \
+                --enable-thread-safe \
+                --docdir=/usr/share/doc/mpfr-4.2.2
     make
     make html
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    make DESTDIR=${pkgdir} install-html
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
+    make DESTDIR="${pkgdir}" install-html
 }

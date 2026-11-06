@@ -1,0 +1,35 @@
+# MLFS 8.19 DejaGNU-1.6.3 —— §8.19；無舊模板自寫
+pkgname=dejagnu
+pkgver=1.6.3
+pkgrel=1
+pkgdesc="GNU 測試框架（runtest；GCC/GDB 測試用）"
+arch=('x86_64')
+url="https://www.gnu.org/software/dejagnu/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Expect and Bash；bash 為底座工具不入帳
+depends=('expect')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('68c5208c58236eba447d7d6d1326b821')
+
+build() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.19：out-of-tree 構建（mkdir build; cd build; ../configure）
+    rm -rf build; mkdir -pv build
+    cd build
+    ../configure --prefix=/usr
+    makeinfo --html --no-split -o doc/dejagnu.html ../doc/dejagnu.texi
+    makeinfo --plaintext       -o doc/dejagnu.txt  ../doc/dejagnu.texi
+}
+
+check() {
+    cd ${pkgname}-${pkgver}/build && make check
+}
+
+package() {
+    cd ${pkgname}-${pkgver}/build
+    make DESTDIR="${pkgdir}" install
+    # 書 8.19：doc 兩份 html/txt
+    install -dm755  "${pkgdir}/usr/share/doc/dejagnu-1.6.3"
+    install -m644   doc/dejagnu.{html,txt} "${pkgdir}/usr/share/doc/dejagnu-1.6.3"
+}

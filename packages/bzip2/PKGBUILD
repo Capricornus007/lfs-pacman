@@ -21,7 +21,7 @@ prepare() {
     sed -i 's@\(ln -s -f \)$(PREFIX)/bin/@\1@' Makefile
     sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
     # 兩棵樹：32 位照書 8.7.3（CC=gcc -m32 重編 Makefile-libbz2_so）
-    cp -a ${pkgname}-${pkgver} build32
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {

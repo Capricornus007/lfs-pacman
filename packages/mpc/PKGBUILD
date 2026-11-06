@@ -1,28 +1,33 @@
+# MLFS 8.25 MPC-1.4.1 —— §8.25；轉換規則見手冊 §7.4
 pkgname=mpc
-pkgver=1.0.3
+pkgver=1.4.1
 pkgrel=1
-pkgdesc="Library for the arithmetic of complex numbers with arbitrarily high precision"
+pkgdesc="多精度複數運算庫"
 arch=('x86_64')
-url="http://www.multiprecision.org/"
-license=('LGPL')
+url="https://www.multiprecision.org/mpc/"
+license=('LGPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc, GMP, and MPFR
+depends=('glibc' 'gmp' 'mpfr')
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('40c5fba305125279ea46041160e81daf')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.25 原文
     ./configure --prefix=/usr    \
-		--disable-static \
-		--docdir=/usr/share/doc/mpc-1.0.3
+                --disable-static \
+                --docdir=/usr/share/doc/mpc-1.4.1
     make
     make html
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    make DESTDIR=${pkgdir} install-html
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
+    make DESTDIR="${pkgdir}" install-html
 }

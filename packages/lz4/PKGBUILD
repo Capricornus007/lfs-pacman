@@ -13,7 +13,7 @@ source=(${pkgname}-${pkgver}.tar.gz)
 md5sums=('dead9f5f1966d9ae56e1e32761e4e675')
 
 prepare() {
-    cp -a ${pkgname}-${pkgver} build32
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {

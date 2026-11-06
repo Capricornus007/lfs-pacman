@@ -14,7 +14,7 @@ md5sums=('a1e6c958597af3c67d162995a342138a')
 
 prepare() {
     # 兩棵構建樹：64 位用原樹（§8.6.1）；32 位用副本（§8.6.2：CFLAGS+=" -m32"、libdir=/usr/lib32）
-    cp -a ${pkgname}-${pkgver} build32
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {

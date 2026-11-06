@@ -1,0 +1,62 @@
+# MLFS 8.17 Tcl-8.6.18 —— §8.17（含 tdbc/itcl 子包、html 文檔第二來源）；無舊模板自寫
+pkgname=tcl
+pkgver=8.6.18
+pkgrel=1
+pkgdesc="Tool Command Language（含 tdbc 1.1.13、itcl 4.3.7）"
+arch=('x86_64')
+url="https://www.tcl-lang.org/"
+license=('TCL')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Zlib
+depends=('glibc' 'zlib')
+source=(tcl${pkgver}-src.tar.gz
+        tcl${pkgver}-html.tar.gz)
+md5sums=('acfe0c9f7d0c626ecf026e834a888da6'
+         '54d1ff0f5eee4e81e5cdaa4baa343397')
+
+build() {
+    cd tcl${pkgver}/unix
+    # 書 8.17.1 configure 原文
+    SRCDIR=$(pwd)
+    cd unix
+    ./configure --prefix=/usr           \
+                --mandir=/usr/share/man \
+                --disable-rpath
+    make
+    # 書 8.17.1：三個 sed 修 config.sh 的 SRCDIR 殘留（變量自適應，照抄）
+    sed -e "s|$SRCDIR/unix|/usr/lib|" \
+        -e "s|$SRCDIR|/usr/include|"  \
+        -i tclConfig.sh
+    sed -e "s|$SRCDIR/unix/pkgs/tdbc1.1.13|/usr/lib/tdbc1.1.13|" \
+        -e "s|$SRCDIR/pkgs/tdbc1.1.13/generic|/usr/include|"     \
+        -e "s|$SRCDIR/pkgs/tdbc1.1.13/library|/usr/lib/tcl8.6|"  \
+        -e "s|$SRCDIR/pkgs/tdbc1.1.13|/usr/include|"             \
+        -i pkgs/tdbc1.1.13/tdbcConfig.sh
+    sed -e "s|$SRCDIR/unix/pkgs/itcl4.3.7|/usr/lib/itcl4.3.7|" \
+        -e "s|$SRCDIR/pkgs/itcl4.3.7/generic|/usr/include|"    \
+        -e "s|$SRCDIR/pkgs/itcl4.3.7|/usr/include|"            \
+        -i pkgs/itcl4.3.7/itclConfig.sh
+    unset SRCDIR
+}
+
+check() {
+    # 書 8.17.1：LC_ALL=C.UTF-8 make test（可選；互動環境部分測試可能逾時，僅書點名者可忽略）
+    cd tcl${pkgver}/unix && LC_ALL=C.UTF-8 make test
+}
+
+package() {
+    cd "${srcdir}/tcl${pkgver}/unix"
+    # 書 8.17.1：make install + chmod 兩條 + private headers + tclsh 連結 + man 頁改名
+    make DESTDIR="${pkgdir}" install
+    chmod 644 "${pkgdir}/usr/lib/libtclstub8.6.a"
+    chmod -v u+w "${pkgdir}/usr/lib/libtcl8.6.so"
+    make DESTDIR="${pkgdir}" install-private-headers
+    ln -sfv tclsh8.6 "${pkgdir}/usr/bin/tclsh"
+    # 書 8.17.1：mv Thread.3 → Tcl_Thread.3（規則 §7.4-3：sed/mv 改用安裝後等價操作）
+    mv -v "${pkgdir}/usr/share/man/man3/Thread.3" \
+          "${pkgdir}/usr/share/man/man3/Tcl_Thread.3" 2>/dev/null || true
+    # 書 8.17.2：html 文檔（第二來源解壓後拷入包）
+    mkdir -pv "${pkgdir}/usr/share/doc/tcl-8.6.18"
+    cd "${srcdir}/tcl${pkgver}/html"
+    cp -v -r ./* "${pkgdir}/usr/share/doc/tcl-8.6.18"
+}

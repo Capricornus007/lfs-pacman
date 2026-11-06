@@ -30,7 +30,7 @@ prepare() {
     mkdir -p tzdata-src
     tar -xf "${srcdir}/tzdata2026e.tar.gz" -C tzdata-src
     # 兩棵構建樹：64 位用原樹（§8.5.1）；32 位用副本（§8.5.2）
-    cp -a ${pkgname}-${pkgver} build32
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
     cd ${pkgname}-${pkgver}
     # 書 8.5.1 兩個補丁，順序照書
     patch -Np1 -i "../${pkgname}-fhs-1.patch"
@@ -47,7 +47,7 @@ build() {
     #   makepkg 是純 DESTDIR 構建，收斂為 package() 一次 DESTDIR install；
     #   include-fixed 清理動的是系統 gcc 目錄（非包內容），放 .install scriptlet。
     cd ${pkgname}-${pkgver}
-    mkdir -pv build
+    rm -rf build; mkdir -pv build
     cd build
     ../configure --prefix=/usr                   \
                  --disable-werror                \
@@ -58,7 +58,7 @@ build() {
     make
     cd ../../build32
     # 32 位（書 8.5.2 configure 原文）
-    mkdir -pv build
+    rm -rf build; mkdir -pv build
     cd build
     CC="gcc -m32" CXX="g++ -m32"             \
     ../configure                             \

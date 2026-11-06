@@ -1,24 +1,29 @@
+# MLFS 8.14 M4-1.4.21 —— §8.14；轉換規則見手冊 §7.4
 pkgname=m4
-pkgver=1.4.18
+pkgver=1.4.21
 pkgrel=1
-pkgdesc="The GNU macro processor"
+pkgdesc="GNU 巨集處理器"
 arch=('x86_64')
-url="http://www.gnu.org/software/m4"
-license=('GPL3')
+url="https://www.gnu.org/software/m4/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash and Glibc；bash 是底座工具不入帳，只寫帳本存在的
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('8051eef7239b2f187791f2ab0034d6b7')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.14
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make prefix=${pkgdir}/usr install
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
 }

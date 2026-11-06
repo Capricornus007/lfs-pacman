@@ -1,29 +1,66 @@
+# MLFS 8.23 GMP-6.3.0 —— §8.23（multilib：lib+lib32，32 位頭裝 /usr/include/m32/gmp）；轉換規則見手冊 §7.4
 pkgname=gmp
-pkgver=6.1.2
+pkgver=6.3.0
 pkgrel=1
-pkgdesc="A free library for arbitrary precision arithmetic"
+pkgdesc="任意精度算術庫（MLFS multilib）"
 arch=('x86_64')
-url="http://gmplib.org/"
-license=('GPL' 'LGPL3')
+url="https://gmplib.org/"
+license=('GPL-2.0-or-later' 'LGPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=GCC and Glibc；gcc 批次 3 晚於本包——cutover 按 §7.4 規則 9 assume-installed 過渡
+depends=('gcc' 'glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('956dc04e864001a9c22429f761f2c283')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.23.1：clang++ 兼容 sed（照抄）
+    sed -i '/long long t1;/,+1s/()/(...)/' configure
+    # 32 位樹（書 8.23.2：distclean 後重 configure；兩棵樹等價且可重入）
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.23.1
     ./configure --prefix=/usr    \
-		--enable-cxx     \
-		--disable-static \
-		--docdir=/usr/share/doc/gmp-6.1.2
+                --enable-cxx     \
+                --disable-static \
+                --docdir=/usr/share/doc/gmp-6.3.0
     make
     make html
+    cd ../build32
+    # 書 8.23.2：configfsf 覆蓋 config 檔 → ABI=32 configure → sed Makefile → make
+    cp -v configfsf.guess config.guess
+    cp -v configfsf.sub   config.sub
+    CFLAGS="-m32 -O2 -pedantic -fomit-frame-pointer -mtune=generic -march=i686" \
+    CXXFLAGS="$CFLAGS"                     \
+    ABI="32"                               \
+    PKG_CONFIG_PATH="/usr/lib32/pkgconfig" \
+    ./configure --prefix=/usr              \
+                --host=i686-pc-linux-gnu   \
+                --disable-static           \
+                --enable-cxx               \
+                --libdir=/usr/lib32        \
+                --includedir=/usr/include/m32/gmp
+    sed -i 's/$(exec_prefix)\/include/$\(includedir\)/' Makefile
+    make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    # 書 8.23.1：make check（PASS 計數：cat $(find -name '*.log') | grep -c ^PASS）
+    cd ${pkgname}-${pkgver} && make check
+    # 書 8.23.2：32 位 check + awk 總分統計
+    cd ../build32
+    make check 2>&1 | tee gmp-check-log
+    awk '/# PASS:/{total+=$3} ; END{print total}' gmp-check-log
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    make DESTDIR=${pkgdir} install-html
+    cd ${pkgname}-${pkgver}
+    make DESTDIR="${pkgdir}" install
+    make DESTDIR="${pkgdir}" install-html
+    # 書 8.23.2：make DESTDIR=$PWD/DESTDIR install → cp lib32 → cp include/m32
+    cd ../build32
+    make DESTDIR="${pkgdir}" install
 }
