@@ -1,0 +1,17 @@
+# MLFS 8.82 pre 7／pre 8 的 install-info：把兩份 info 頁註冊進系統 dir
+# 作用對象是已安裝系統的 /usr/share/info/dir，純 DESTDIR 打包做不到，
+# 故歸 .install（手冊 §7.4 規則 12／16；與 texinfo.install 同型）。
+_e2fsprogs_register_info() {
+    for f in libext2fs.info com_err.info; do
+        [ -f "/usr/share/info/$f" ] || continue
+        install-info --dir-file=/usr/share/info/dir "/usr/share/info/$f" 2>/dev/null || true
+    done
+}
+
+post_install() {
+    _e2fsprogs_register_info
+}
+
+post_upgrade() {
+    _e2fsprogs_register_info
+}

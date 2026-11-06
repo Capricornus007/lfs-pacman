@@ -1,0 +1,66 @@
+# MLFS 8.84 OpenRC-0.63.3 —— §8.84（lock 補丁＋meson/ninja；無舊模板自寫）
+# 書 pre 6 的 if [ -d /etc/conf.d ] 分支是「保留既有自訂設定」的宿主動作；
+# pacman 以 backup=() 處理設定檔保存，這裡只做單純 DESTDIR 安裝（規則 12）。
+pkgname=openrc
+pkgver=0.63.3
+pkgrel=1
+pkgdesc="OpenRC 依賴式 init 系統"
+arch=('x86_64')
+url="https://github.com/OpenRC/openrc"
+license=('BSD-2-Clause')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
+makedepends=('meson' 'ninja' 'pkgconf')
+source=(${pkgname}-${pkgver}.tar.gz
+        ${pkgname}-${pkgver}-lock-1.patch)
+md5sums=('837e7895fae3d8bb33643acb974e2c07'
+         '8f469b5cb5136d6cac7482d80278a952')
+backup=(etc/rc.conf etc/conf.d/keymaps etc/conf.d/hostname)
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.84 pre 1–2
+    patch -Np1 -i ../${pkgname}-${pkgver}-lock-1.patch
+    sed -i '/set -u/d' tools/meson_final.sh
+    rm -rf build; mkdir build
+}
+
+build() {
+    cd ${pkgname}-${pkgver}/build
+    # 書 8.84 pre 3–4
+    meson setup --prefix=/usr       \
+                --buildtype=release \
+                -D uucp_group=root  \
+                -D pam=false ..
+    ninja
+}
+
+check() {
+    cd ${pkgname}-${pkgver}/build && ninja test
+}
+
+package() {
+    cd ${pkgname}-${pkgver}/build
+    # 書 8.84 pre 6；規則 10：DESTDIR 必須前置為環境變數
+    DESTDIR="${pkgdir}" ninja install
+    # 書 8.84 pre 6 尾：rc-update 從 sbin 移到 bin
+    install -d "${pkgdir}/usr/bin"
+    mv -v "${pkgdir}/usr/sbin/rc-update" "${pkgdir}/usr/bin/rc-update"
+    # 書 8.84 pre 7：init/shutdown 連結與 poweroff/reboot 腳本
+    install -d "${pkgdir}/sbin"
+    for i in init shutdown; do
+        ln -svf openrc-$i "${pkgdir}/sbin/$i"
+    done
+    cat > "${pkgdir}/sbin/poweroff" << "EOF"
+#!/bin/sh
+/sbin/shutdown --poweroff now
+EOF
+    cat > "${pkgdir}/sbin/reboot" << "EOF"
+#!/bin/sh
+/sbin/shutdown --reboot now
+EOF
+    chmod 755 "${pkgdir}/sbin/poweroff" "${pkgdir}/sbin/reboot"
+    # 書第 9 章 §9.5 的服務啟用（rc-update add …）尚未在此節，
+    # 屬開機後的操作者動作，見手冊 §7.4 規則 12 清單。
+}

@@ -1,41 +1,89 @@
+# MLFS 8.81 Util-linux-2.42.4 —— §8.81（64 位主裝＋32 位只取 lib32）
+#
+# ⚠️ 離線書 §8.81.2 本身有缺漏：「Prepare Util-linux for compilation:」之後
+#    沒有任何 configure 指令（該節只有 make distclean／兩個 mv／make／install）。
+#    32 位 configure 改取同書第 7 章 chapter07/util-linux.html pre 6 的
+#    `CC="gcc -m32" ./configure --host=i686-pc-linux-gnu --libdir=/usr/lib32 …`
+#    （同版本 2.42.4、同一套 disable/without 選項），詳手冊 §7.4 規則 17。
+#    書 pre 7／8 的 `mv /usr/bin/ncursesw6-config{,.tmp}` 與還原是 root 才能做的
+#    宿主動作，makepkg 非 root 做不到，已列為操作者步驟（規則 12/17）。
 pkgname=util-linux
-pkgver=2.30.1
+pkgver=2.42.4
 pkgrel=1
-pkgdesc="Miscellaneous system utilities for Linux"
+pkgdesc="各式 Linux 系統工具（fdisk、mount、lsblk…）"
 arch=('x86_64')
 url="https://www.kernel.org/pub/linux/utils/util-linux/"
-license=('GPL2')
+license=('GPL-2.0-or-later' 'LGPL-2.1-or-later' 'BSD-3-Clause')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc, Ncurses, Readline, Udev, and Zlib
+depends=('glibc' 'ncurses' 'readline' 'udev' 'zlib')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('0d25a2070c56b1f9f0b5a0ac6b29135a')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
+    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure ADJTIME_PATH=/var/lib/hwclock/adjtime   \
-		--docdir=/usr/share/doc/util-linux-${pkgver} \
-		--disable-chfn-chsh  \
-		--disable-login      \
-		--disable-nologin    \
-		--disable-su         \
-		--disable-setpriv    \
-		--disable-runuser    \
-		--disable-pylibmount \
-		--disable-static     \
-		--without-python     \
-		--without-systemd    \
-		--without-systemdsystemunitdir
+    cd ${pkgname}-${pkgver}
+    # 書 8.81.1 pre 1–2（64 位）
+    ./configure --bindir=/usr/bin     \
+                --libdir=/usr/lib     \
+                --runstatedir=/run    \
+                --sbindir=/usr/sbin   \
+                --disable-chfn-chsh   \
+                --disable-login       \
+                --disable-nologin     \
+                --disable-su          \
+                --disable-setpriv     \
+                --disable-runuser     \
+                --disable-pylibmount  \
+                --disable-liblastlog2 \
+                --disable-static      \
+                --without-python      \
+                --without-systemd     \
+                --without-systemdsystemunitdir        \
+                ADJTIME_PATH=/var/lib/hwclock/adjtime \
+                --docdir=/usr/share/doc/util-linux-2.42.4
+    make
+
+    cd ../build32
+    # 書第 7 章 pre 6（§8.81.2 缺漏的 32 位 configure，見檔頭說明）
+    CC="gcc -m32"                        \
+    ./configure --host=i686-pc-linux-gnu \
+                --libdir=/usr/lib32      \
+                --runstatedir=/run       \
+                --disable-chfn-chsh      \
+                --disable-login          \
+                --disable-nologin        \
+                --disable-su             \
+                --disable-setpriv        \
+                --disable-runuser        \
+                --disable-pylibmount     \
+                --disable-static         \
+                --disable-liblastlog2    \
+                --without-python         \
+                ADJTIME_PATH=/var/lib/hwclock/adjtime
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make -k check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 pre 3 的 tests/run.sh 與 pre 4 的 touch /etc/fstab、chown、su tester
+    # 都是 root／宿主動作；makepkg 非 root，改跑非特權檢查（規則 12）
+    make -k check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    install -vdm755 ${pkgdir}/var/lib/hwclock
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.81.1 pre 5
+    install -vdm755 "${pkgdir}/var/lib/hwclock"
+    make DESTDIR="${pkgdir}" install
+
+    cd ../build32
+    # 書 8.81.2 pre 10
+    rm -rf "${srcdir}/util-linux-m32"
+    make DESTDIR="${srcdir}/util-linux-m32" install
+    install -d "${pkgdir}/usr/lib32"
+    cp -Rv "${srcdir}/util-linux-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
 }

@@ -1,48 +1,51 @@
+# MLFS 8.82 E2fsprogs-1.47.4 —— §8.82（out-of-tree build＋info 頁＋mke2fs.conf）
 pkgname=e2fsprogs
-pkgver=1.43.5
+pkgver=1.47.4
 pkgrel=1
-pkgdesc="Ext2/3/4 filesystem utilities"
+pkgdesc="ext2/ext3/ext4 檔案系統工具"
 arch=('x86_64')
-url="http://e2fsprogs.sourceforge.net/"
-license=('GPL' 'LGPL' 'MIT')
+url="https://e2fsprogs.sourceforge.net/"
+license=('GPL-2.0-or-later' 'LGPL-2.0-or-later' 'MIT')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Util-linux
+depends=('glibc' 'util-linux')
+install=e2fsprogs.install
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('733a93bc688314834ff2d10530ff4dc4')
+backup=(etc/mke2fs.conf)
 
 build() {
-    cd "${pkgname}-${pkgver}"
-
-    mkdir -v build
+    cd ${pkgname}-${pkgver}
+    rm -rf build; mkdir -v build
     cd build
-
-    LIBS=-L/tools/lib                    \
-    CFLAGS=-I/tools/include              \
-    PKG_CONFIG_PATH=/tools/lib/pkgconfig \
-    ../configure --prefix=/usr           \
-                 --bindir=/bin           \
-		 --with-root-prefix=""   \
-		 --enable-elf-shlibs     \
-		 --disable-libblkid      \
-		 --disable-libuuid       \
-		 --disable-uuidd         \
-		 --disable-fsck
-
+    # 書 8.82 pre 2–3
+    ../configure --prefix=/usr       \
+                 --sysconfdir=/etc   \
+                 --enable-elf-shlibs \
+                 --disable-libblkid  \
+                 --disable-libuuid   \
+                 --disable-uuidd     \
+                 --disable-fsck
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}/build"
-    make LD_LIBRARY_PATH=/tools/lib check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}/build && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}/build"
-    make DESTDIR=${pkgdir} install install-libs
-
-     chmod -v u+w ${pkgdir}/usr/lib/{libcom_err,libe2p,libext2fs,libss}.a
-
-     gunzip -v ${pkgdir}/usr/share/info/libext2fs.info.gz
-    install-info --dir-file=${pkgdir}/usr/share/info/dir ${pkgdir}/usr/share/info/libext2fs.info
-
-     makeinfo -o doc/com_err.info ../lib/et/com_err.texinfo
-    install -v -m644 doc/com_err.info ${pkgdir}/usr/share/info
-    install-info --dir-file=${pkgdir}/usr/share/info/dir ${pkgdir}/usr/share/info/com_err.info
+    cd ${pkgname}-${pkgver}/build
+    # 書 8.82 pre 5–6
+    make DESTDIR="${pkgdir}" install
+    rm -fv "${pkgdir}"/usr/lib/{libcom_err,libe2p,libext2fs,libss}.a
+    # 書 8.82 pre 7 前半、pre 8：作用對象是 $pkgdir，留在 package()
+    gunzip -v "${pkgdir}/usr/share/info/libext2fs.info.gz"
+    makeinfo -o doc/com_err.info ../lib/et/com_err.texinfo
+    install -v -m644 doc/com_err.info "${pkgdir}/usr/share/info"
+    # 書 8.82 pre 9：mke2fs.conf 是本套件裝的檔，可在 $pkgdir 內直接改
+    if [ -f "${pkgdir}/etc/mke2fs.conf" ]; then
+        sed 's/metadata_csum_seed,//' -i "${pkgdir}/etc/mke2fs.conf"
+    fi
+    # 書 8.82 pre 7 後半／pre 8 尾的 install-info 需要系統 /usr/share/info/dir，
+    # 歸 e2fsprogs.install（同 texinfo，規則 12/16）。
 }

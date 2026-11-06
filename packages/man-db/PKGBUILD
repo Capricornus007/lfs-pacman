@@ -1,32 +1,39 @@
+# MLFS 8.79 Man-DB-2.13.1 —— §8.79
 pkgname=man-db
-pkgver=2.7.6.1
+pkgver=2.13.1
 pkgrel=1
-pkgdesc="A utility for reading man pages"
+pkgdesc="man 頁面索引與檢索工具"
 arch=('x86_64')
-url="http://www.nongnu.org/man-db/"
-license=('GPL' 'LGPL')
+url="https://www.nongnu.org/man-db/"
+license=('GPL-3.0-or-later' 'LGPL-2.1-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, GDBM, Groff, Glibc, Gzip, Less, Libpipeline, and Zlib
+depends=('bash' 'gdbm' 'groff' 'glibc' 'gzip' 'less' 'libpipeline' 'zlib')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('b6335533cbeac3b24cd7be31fdee8c83')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr                        \
-		--docdir=/usr/share/doc/man-db-${pkgver} \
-		--sysconfdir=/etc                    \
-		--disable-setuid                     \
-		--enable-cache-owner=bin             \
-		--with-browser=/usr/bin/lynx         \
-		--with-vgrind=/usr/bin/vgrind        \
-		--with-grap=/usr/bin/grap            \
-		--with-systemdtmpfilesdir=
+    cd ${pkgname}-${pkgver}
+    # 書 8.79 pre 1–2
+    ./configure --prefix=/usr                         \
+                --docdir=/usr/share/doc/man-db-2.13.1 \
+                --sysconfdir=/etc                     \
+                --disable-setuid                      \
+                --enable-cache-owner=bin              \
+                --with-browser=/usr/bin/lynx          \
+                --with-vgrind=/usr/bin/vgrind         \
+                --with-grap=/usr/bin/grap             \
+                --with-systemdtmpfilesdir=            \
+                --with-systemdsystemunitdir=
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.79 pre 4
+    make DESTDIR="${pkgdir}" install
 }
