@@ -1,24 +1,30 @@
+# MLFS 8.72 Patch-2.8.1 —— §8.72
 pkgname=patch
-pkgver=2.7.5
+pkgver=2.8.1
 pkgrel=1
-pkgdesc="A utility to apply patch files to original sources"
+pkgdesc="套用 diff 補丁的工具"
 arch=('x86_64')
-url="http://www.gnu.org/software/patch/patch.html"
-license=('GPL')
+url="https://www.gnu.org/software/patch/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Attr and Glibc
+depends=('attr' 'glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('385458c8de6334c36b56ce7fd198411c')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.72 pre 1–2
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.72 pre 4
+    make DESTDIR="${pkgdir}" install
 }

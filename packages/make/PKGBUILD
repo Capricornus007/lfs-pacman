@@ -1,25 +1,32 @@
+# MLFS 8.71 Make-4.4.1 —— §8.71
 pkgname=make
-pkgver=4.2.1
+pkgver=4.4.1
 pkgrel=1
-pkgdesc="GNU make utility to maintain groups of programs"
+pkgdesc="GNU make 建置工具"
 arch=('x86_64')
-url="http://www.gnu.org/software/make"
-license=('GPL3')
-backup=()
-source=(${pkgname}-${pkgver}.tar.bz2)
+url="https://www.gnu.org/software/make/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('c8469a3713cbbe04d955d4ae4be23eeb')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.71 pre 1–2
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make PERL5LIB=$PWD/tests/ check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 pre 3 的 chown/su tester 省略（規則 12）
+    make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.71 pre 4
+    make DESTDIR="${pkgdir}" install
 }

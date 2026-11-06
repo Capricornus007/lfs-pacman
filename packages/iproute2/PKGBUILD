@@ -1,28 +1,34 @@
+# MLFS 8.68 IPRoute2-7.3.0 —— §8.68（make 系，無 configure）
 pkgname=iproute2
-pkgver=4.12.0
+pkgver=7.3.0
 pkgrel=1
-pkgdesc="IP Routing Utilities"
+pkgdesc="IP 路由與網路設定工具（ip、tc、ss…）"
 arch=('x86_64')
-url="http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2"
-license=('GPL2')
+url="https://wiki.linuxfoundation.org/networking/iproute2"
+license=('GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Coreutils, Glibc, Libcap, Libelf, and Zlib
+depends=('bash' 'coreutils' 'glibc' 'libcap' 'libelf' 'zlib')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('b51e7e3eaf2cee927417192045f3466d')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-
+    cd ${pkgname}-${pkgver}
+    # 書 8.68 pre 1
     sed -i /ARPD/d Makefile
-    sed -i 's/arpd.8//' man/man8/Makefile
-    rm -v doc/arpd.sgml
-
-    sed -i 's/m_ipt.o//' tc/Makefile
+    rm -fv man/man8/arpd.8
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    make
+    cd ${pkgname}-${pkgver}
+    # 書 8.68 pre 2
+    make NETNS_RUN_DIR=/run/netns
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} DOCDIR=/usr/share/doc/iproute2-${pkgver} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.68 pre 3
+    make SBINDIR=/usr/sbin DESTDIR="${pkgdir}" install
+    # 書 8.68 pre 4
+    install -vDm644 COPYING README* -t "${pkgdir}/usr/share/doc/iproute2-7.3.0"
 }

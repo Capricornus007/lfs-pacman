@@ -1,26 +1,41 @@
+# MLFS 8.73 Tar-1.35 —— §8.73（acl_fix 補丁＋HTML 文件）
 pkgname=tar
-pkgver=1.29
+pkgver=1.35
 pkgrel=1
-pkgdesc="Utility used to store, backup, and transport files"
+pkgdesc="GNU 封裝／備份工具"
 arch=('x86_64')
-url="https://www.gnu.org/software/tar/tar.html"
-license=('GPL3')
-source=(${pkgname}-${pkgver}.tar.xz)
+url="https://www.gnu.org/software/tar/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Acl, Attr, Bzip2, Glibc, Gzip, and Xz
+depends=('acl' 'attr' 'bzip2' 'glibc' 'gzip' 'xz')
+source=(${pkgname}-${pkgver}.tar.xz
+        ${pkgname}-${pkgver}-acl_fix-1.patch)
+md5sums=('a2d8042658cfd8ea939e6d911eaf4152'
+         'dbab49e317105539611866dac5dd54f6')
+
+prepare() {
+    cd ${pkgname}-${pkgver}
+    # 書 8.73 pre 1
+    patch -Np1 -i ../${pkgname}-${pkgver}-acl_fix-1.patch
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr \
-		--bindir=/bin
+    cd ${pkgname}-${pkgver}
+    # 書 8.73 pre 2–3（舊模板的 --bindir=/bin 現行書已無，規則 13）
+    FORCE_UNSAFE_CONFIGURE=1  \
+    ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    make DESTDIR=${pkgdir} -C doc install-html docdir=/usr/share/doc/tar-${pkgver}
+    cd ${pkgname}-${pkgver}
+    # 書 8.73 pre 5
+    make DESTDIR="${pkgdir}" install
+    make DESTDIR="${pkgdir}" -C doc install-html \
+        docdir=/usr/share/doc/tar-1.35
 }

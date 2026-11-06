@@ -1,46 +1,51 @@
+# MLFS 8.62 Coreutils-9.12 —— §8.62（i18n 補丁＋autoreconf）
 pkgname=coreutils
-pkgver=8.27
+pkgver=9.12
 pkgrel=1
-pkgdesc="The basic file, shell and text manipulation utilities of the GNU operating system"
+pkgdesc="GNU 基礎檔案／shell／文字工具組"
 arch=('x86_64')
 url="https://www.gnu.org/software/coreutils/"
-license=('GPL3')
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.xz
-	coreutils-8.27-i18n-1.patch)
+        ${pkgname}-${pkgver}-i18n-1.patch)
+md5sums=('d7451ac748c319e6e1bc30e9ec63956c'
+         'e776ce5c8e03e065dc07dc6f20ab65e9')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-    patch -Np1 -i ../coreutils-8.27-i18n-1.patch
-    sed -i '/test.lock/s/^/#/' gnulib-tests/gnulib.mk
+    cd ${pkgname}-${pkgver}
+    # 書 8.62 pre 1–2
+    patch -Np1 -i ../${pkgname}-${pkgver}-i18n-1.patch
+    autoreconf -fv
+    automake -af
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure       \
-        --prefix=/usr \
-        --enable-no-install-program=kill,uptime
+    cd ${pkgname}-${pkgver}
+    # 書 8.62 pre 2–3
+    FORCE_UNSAFE_CONFIGURE=1 ./configure \
+                --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make RUN_EXPENSIVE_TESTS=yes check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 pre 4–8 的 check-root / groupadd / chown -R tester / su tester / groupdel
+    # 全是 root 專屬的系統動作；makepkg 非 root，改跑非特權測試（規則 12）
+    make -k RUN_EXPENSIVE_TESTS=yes check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/bin
-    install -vdm755 ${pkgdir}/usr/sbin
-    install -vdm755 ${pkgdir}/usr/share/man/man8
-    mv -v ${pkgdir}/usr/bin/{cat,chgrp,chmod,chown,cp,date,dd,df,echo} ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/{false,ln,ls,mkdir,mknod,mv,pwd,rm} ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/{rmdir,stty,sync,true,uname} ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/chroot ${pkgdir}/usr/sbin
-    install -vm644 ${pkgdir}/usr/share/man/man1/chroot.1 ${pkgdir}/usr/share/man/man8/chroot.8
-    sed s/\"1\"/\"8\"/1 ${pkgdir}/usr/share/man/man8/chroot.8 > ${srcdir}/chroot.8
-    install -vm644 ${srcdir}/chroot.8 ${pkgdir}/usr/share/man/man8/chroot.8
-
-    mv -v ${pkgdir}/usr/bin/{head,sleep,nice,test,[} ${pkgdir}/bin
+    cd ${pkgname}-${pkgver}
+    # 書 8.62 pre 9
+    make DESTDIR="${pkgdir}" install
+    # 書 8.62 pre 10：chroot 移到 sbin、man 從 1 改 8
+    install -d "${pkgdir}/usr/sbin" "${pkgdir}/usr/share/man/man8"
+    mv -v "${pkgdir}/usr/bin/chroot" "${pkgdir}/usr/sbin/chroot"
+    mv -v "${pkgdir}/usr/share/man/man1/chroot.1" \
+          "${pkgdir}/usr/share/man/man8/chroot.8"
+    sed -i 's/"1"/"8"/' "${pkgdir}/usr/share/man/man8/chroot.8"
+    # 舊模板把大半工具搬去 /bin 是 2017 習慣，現行書無此步（規則 13）
 }

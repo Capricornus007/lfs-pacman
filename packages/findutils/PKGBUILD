@@ -1,38 +1,32 @@
+# MLFS 8.64 Findutils-4.11.0 —— §8.64
 pkgname=findutils
-pkgver=4.6.0
+pkgver=4.11.0
 pkgrel=1
-pkgdesc="GNU utilities to locate files"
+pkgdesc="GNU 檔案搜尋工具（find、xargs、locate）"
 arch=('x86_64')
-url="http://www.gnu.org/software/findutils"
-license=('GPL3')
-source=(${pkgname}-${pkgver}.tar.gz)
-
-prepare() {
-    cd "${pkgname}-${pkgver}"
-
-    # Suppress a test which on some machines can loop forever.
-    sed -i 's/test-lock..EXEEXT.//' tests/Makefile.in
-
-}
+url="https://www.gnu.org/software/findutils/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash and Glibc
+depends=('bash' 'glibc')
+source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('512c6875ed84034dca240c4bc9380b96')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.64 pre 1–2
     ./configure --prefix=/usr --localstatedir=/var/lib/locate
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 pre 3 的 chown/su tester 省略（makepkg 非 root，規則 12）
+    make -k check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/find ${pkgdir}/bin
-
-    sed 's|find:=${BINDIR}|find:=/bin|' ${pkgdir}/usr/bin/updatedb > ${srcdir}/updatedb
-    install -vm644 ${srcdir}/updatedb ${pkgdir}/usr/bin/updatedb
+    cd ${pkgname}-${pkgver}
+    # 書 8.64 pre 4；舊模板把 find 搬去 /bin 現行書已無（規則 13）
+    make DESTDIR="${pkgdir}" install
 }

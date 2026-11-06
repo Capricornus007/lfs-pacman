@@ -1,25 +1,34 @@
+# MLFS 8.74 Texinfo-7.3 —— §8.74（info dir 索引歸 .install）
 pkgname=texinfo
-pkgver=6.4
+pkgver=7.3
 pkgrel=1
-pkgdesc="GNU documentation system for on-line information and printed output"
+pkgdesc="GNU 文件系統（info／TeX）"
 arch=('x86_64')
-url="http://www.gnu.org/software/texinfo/"
-license=('GPL3')
+url="https://www.gnu.org/software/texinfo/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc and Ncurses
+depends=('glibc' 'ncurses')
+install=texinfo.install
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('915a09fcdfc2bf0f5ecf9e556d5698ff')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr --disable-static
+    cd ${pkgname}-${pkgver}
+    # 書 8.74 pre 1–2
+    ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-    make DESTDIR=${pkgdir} TEXMF=/usr/share/texmf install-tex
+    cd ${pkgname}-${pkgver}
+    # 書 8.74 pre 4–5
+    make DESTDIR="${pkgdir}" install
+    make DESTDIR="${pkgdir}" TEXMF=/usr/share/texmf install-tex
+    # 書 8.74 pre 6 是對「已安裝系統的 /usr/share/info」重建 dir 索引，
+    # 需要 install-info 與其它套件的 info 檔都在位，故移到 texinfo.install（規則 12）。
 }

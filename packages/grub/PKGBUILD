@@ -1,23 +1,62 @@
+# MLFS 8.66 GRUB-2.16 —— §8.66（三棵樹：BIOS／EFI x86_64／EFI i386）
+# 書用 make clean 在同一棵樹連改三次 configure；改三棵副本（規則 10）。
+# 三輪 install 的檔案互不衝突，可依序裝進同一個 $pkgdir。
 pkgname=grub
-pkgver=2.02
+pkgver=2.16
 pkgrel=1
-pkgdesc="GNU GRand Unified Bootloader (2)"
+pkgdesc="GNU GRand Unified Bootloader 2"
 arch=('x86_64')
 url="https://www.gnu.org/software/grub/"
-license=('GPL3')
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, GCC, Gettext, Glibc, Xz, and Sed
+depends=('bash' 'gcc' 'gettext' 'glibc' 'xz' 'sed')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('1c611aa4712ce1ea447b9cbdfdb072a4')
+
+prepare() {
+    rm -rf efi64 efi32
+    cp -a ${pkgname}-${pkgver} efi64
+    cp -a ${pkgname}-${pkgver} efi32
+}
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    ./configure --prefix=/usr          \
-		--sbindir=/sbin        \
-		--sysconfdir=/etc      \
-		--disable-efiemu       \
-		--disable-werror
+    # 書 8.66 pre 1：GRUB 不吃這些旗標
+    unset {C,CPP,CXX,LD}FLAGS
+
+    cd ${pkgname}-${pkgver}
+    # 書 8.66 pre 2–3（BIOS 預設平台）
+    ./configure --prefix=/usr     \
+                --sysconfdir=/etc \
+                --disable-efiemu  \
+                --disable-werror
+    make
+
+    cd ../efi64
+    # 書 8.66 pre 6–7
+    ./configure --prefix=/usr       \
+                --sysconfdir=/etc   \
+                --target=x86_64     \
+                --with-platform=efi \
+                --disable-efiemu    \
+                --disable-werror
+    make
+
+    cd ../efi32
+    # 書 8.66 pre 10–11
+    ./configure --prefix=/usr       \
+                --sysconfdir=/etc   \
+                --target=i386       \
+                --with-platform=efi \
+                --disable-efiemu    \
+                --disable-werror
     make
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    # 書 8.66 pre 4／8／12：三輪 make install 全部 DESTDIR 化
+    for d in ${pkgname}-${pkgver} efi64 efi32; do
+        cd "${srcdir}/$d"
+        make DESTDIR="${pkgdir}" install
+    done
 }

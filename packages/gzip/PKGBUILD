@@ -1,27 +1,30 @@
+# MLFS 8.67 Gzip-1.15 —— §8.67
 pkgname=gzip
-pkgver=1.8
+pkgver=1.15
 pkgrel=1
-pkgdesc="GNU compression utility"
+pkgdesc="GNU 壓縮工具"
 arch=('x86_64')
-url="http://www.gnu.org/software/gzip/"
-license=('GPL3')
+url="https://www.gnu.org/software/gzip/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash and Glibc
+depends=('bash' 'glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('8b5711442bf246612d0c51de0bf79964')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.67 pre 1–2
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/bin
-    mv -v ${pkgdir}/usr/bin/gzip ${pkgdir}/bin
+    cd ${pkgname}-${pkgver}
+    # 書 8.67 pre 4；舊模板把 gzip 搬去 /bin 現行書已無（規則 13）
+    make DESTDIR="${pkgdir}" install
 }

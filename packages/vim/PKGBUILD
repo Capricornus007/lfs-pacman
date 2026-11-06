@@ -1,43 +1,70 @@
+# MLFS 8.75 Vim-9.2.1225 —— §8.75（新配置檔 /etc/vimrc 進包）
 pkgname=vim
-pkgver=8.0.586
+pkgver=9.2.1225
 pkgrel=1
-pkgdesc="Vi Improved, a highly configurable, improved version of the vi text editor"
+pkgdesc="Vi Improved 文字編輯器"
 arch=('x86_64')
-url="http://www.vim.org/"
+url="https://www.vim.org/"
 license=('custom:vim')
-backup=('etc/vimrc')
-source=(${pkgname}-${pkgver}.tar.bz2
-	vimrc)
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Acl, Attr, Glibc, Python, Ncurses, and Tcl
+depends=('acl' 'attr' 'glibc' 'python' 'ncurses' 'tcl')
+source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('a3594aae508c628c50bf3c71af37813b')
+backup=(etc/vimrc)
 
 prepare() {
-    cd "${pkgname}80"
+    cd ${pkgname}-${pkgver}
+    # 書 8.75 pre 1
     echo '#define SYS_VIMRC_FILE "/etc/vimrc"' >> src/feature.h
-    sed -i '/call/{s/split/xsplit/;s/303/492/}' src/testdir/test_recover.vim
 }
 
 build() {
-    cd "${pkgname}80"
+    cd ${pkgname}-${pkgver}
+    # 書 8.75 pre 2–3
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}80"
-    make -j1 test 2>&1 > ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver}
+    # 書 pre 4 的 chown -R tester 省略（規則 12）；測試修補照書
+    sed '/test_plugin_glvs/d' -i src/testdir/Make_all.mak
+    TERM=xterm-256color LANG=en_US.UTF-8 make -j1 test
 }
 
 package() {
-    cd "${pkgname}80"
-    make DESTDIR=${pkgdir} install
-
-    ln -sv vim ${pkgdir}/usr/bin/vi
-    for L in  ${pkgdir}/usr/share/man/{,*/}man1/vim.1; do
-	ln -sv vim.1 $(dirname $L)/vi.1
+    cd ${pkgname}-${pkgver}
+    # 書 8.75 pre 6
+    make DESTDIR="${pkgdir}" install
+    # 書 8.75 pre 7
+    ln -sv vim "${pkgdir}/usr/bin/vi"
+    for L in "${pkgdir}"/usr/share/man/{,*/}man1/vim.1; do
+        [ -e "$L" ] || continue
+        ln -sv vim.1 "$(dirname "$L")/vi.1"
     done
+    # 書 8.75 pre 8
+    install -d "${pkgdir}/usr/share/doc"
+    ln -sv ../vim/vim92/doc "${pkgdir}/usr/share/doc/vim-9.2.1225"
+    # 書 8.75 pre 9：/etc/vimrc 是新建立的配置檔 → 進包（規則 12／14）
+    install -d "${pkgdir}/etc"
+    cat > "${pkgdir}/etc/vimrc" << "EOF"
+" Begin /etc/vimrc
 
-    install -vdm755 ${pkgdir}/usr/share/doc/${pkgname}-${pkgver}
-    ln -sv ../vim/vim80/doc ${pkgdir}/usr/share/doc/${pkgname}-${pkgver}
+" Ensure defaults are set before customizing settings, not after
+source $VIMRUNTIME/defaults.vim
+let skip_defaults_vim=1
 
-    install -vdm755 ${pkgdir}/etc
-    install -vm644 ${srcdir}/vimrc ${pkgdir}/etc/vimrc
+set nocompatible
+set backspace=2
+set mouse=
+syntax on
+if (&term == "xterm") || (&term == "putty")
+  set background=dark
+endif
+
+" End /etc/vimrc
+EOF
+    # 書 pre 10–11（`vim -c ':options'`、`set spelllang`／`set spell`）為互動式，
+    # 屬操作者動作，見 §7.4 規則 12 清單。
 }

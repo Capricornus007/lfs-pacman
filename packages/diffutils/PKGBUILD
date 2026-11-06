@@ -1,24 +1,30 @@
+# MLFS 8.63 Diffutils-3.12 —— §8.63
 pkgname=diffutils
-pkgver=3.6
+pkgver=3.12
 pkgrel=1
-pkgdesc="Utility programs used for creating patch files"
+pkgdesc="GNU 差異比對與補丁工具"
 arch=('x86_64')
-url="https://www.gnu.org/software/diffutils"
-license=('GPL3')
+url="https://www.gnu.org/software/diffutils/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.xz)
+md5sums=('d1b18b20868fb561f77861cd90b05de4')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.63 pre 1–2
     ./configure --prefix=/usr
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.63 pre 4
+    make DESTDIR="${pkgdir}" install
 }

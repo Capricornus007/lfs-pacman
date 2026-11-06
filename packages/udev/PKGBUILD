@@ -1,0 +1,132 @@
+# MLFS 8.78 Udev from Systemd-262.1 —— §8.78（三來源；meson 部分構建；64 位手裝＋32 位 lib32）
+# 這是全書最繁的一節：只取 udev，不裝 systemd 其它元件。
+# 書在同一 build/ 裡 `rm -rf *` 重 setup，改為 build/ 與 build32/ 兩棵樹（規則 10）。
+pkgname=udev
+pkgver=262.1
+pkgrel=1
+pkgdesc="udev 裝置管理（取自 systemd，僅 udev 元件）"
+arch=('x86_64')
+url="https://www.freedesktop.org/wiki/Software/systemd/"
+license=('LGPL-2.1-or-later' 'GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Acl, Glibc, Libcap, OpenSSL, and Util-linux（util-linux 在批次 7，規則 11）
+depends=('acl' 'glibc' 'libcap' 'openssl' 'util-linux')
+makedepends=('meson' 'ninja' 'pkgconf' 'python' 'jinja2' 'gperf'
+             'libcap' 'openssl' 'acl' 'util-linux')
+install=udev.install
+source=(systemd-${pkgver}.tar.gz
+        udev-lfs-20230818.tar.xz
+        systemd-man-pages-${pkgver}.tar.xz)
+noextract=(udev-lfs-20230818.tar.xz
+           systemd-man-pages-${pkgver}.tar.xz)
+md5sums=('5aff3c8c8a663d4cd99d1cc89530fd09'
+         'acd4360d8a5c3ef320b9db88d275dae6'
+         '20c428161a5783fdc9f79a1bbb95563c')
+
+prepare() {
+    cd systemd-${pkgver}
+    # 書 8.78 pre 1–3
+    sed -e 's/GROUP="render"/GROUP="video"/' \
+        -e 's/GROUP="sgx", //'               \
+        -i rules.d/50-udev-default.rules.in
+    sed -i '/systemd-sysctl/s/^/#/' rules.d/99-systemd.rules.in
+    sed -e '/NETWORK_DIRS/s/systemd/udev/' \
+        -i src/libsystemd/sd-network/network-util.h
+    rm -rf build build32; mkdir -p build build32
+}
+
+build() {
+    cd systemd-${pkgver}/build
+    # 書 8.78 pre 4
+    meson setup ..                  \
+          --prefix=/usr             \
+          --buildtype=release       \
+          -D mode=release           \
+          -D dev-kvm-mode=0660      \
+          -D link-udev-shared=false \
+          -D logind=false           \
+          -D vconsole=false
+    # 書 8.78 pre 5–6
+    export udev_helpers=$(grep "'name' :" ../src/udev/meson.build | \
+                          awk '{print $3}' | tr -d ",'" | grep -v 'udevadm')
+    ninja udevadm systemd-hwdb                                           \
+          $(ninja -n | grep -Eo '(src/(lib)?udev|rules.d|hwdb.d)/[^ ]*') \
+          $(realpath libudev.so --relative-to .)                         \
+          $udev_helpers
+
+    cd ../build32
+    # 書 8.78 pre 12–13（--cross-file=lib32 由 8.60 meson 提供）
+    LANG=en_US.UTF-8                      \
+    meson setup --prefix=/usr             \
+                --buildtype=release       \
+                --cross-file=lib32        \
+                -D mode=release           \
+                -D dev-kvm-mode=0660      \
+                -D link-udev-shared=false \
+                -D logind=false           \
+                -D vconsole=false         \
+                ..
+    ninja $(grep -o -E "^build (src/libudev|src/udev)[^:]*" \
+            build.ninja | awk '{ print $2 }')               \
+          $(realpath libudev.so --relative-to .)
+}
+
+package() {
+    P="${pkgdir}"
+    cd systemd-${pkgver}/build
+    # makepkg 的 build()／package() 是不同 shell，udev_helpers 要重算
+    udev_helpers=$(grep "'name' :" ../src/udev/meson.build | \
+                   awk '{print $3}' | tr -d ",'" | grep -v 'udevadm')
+
+    # 書 8.78 pre 7：全部絕對路徑加 $pkgdir
+    install -vm755 -d "$P"/usr/lib/udev/{hwdb.d,rules.d,network} \
+                       "$P"/etc/udev/{hwdb.d,rules.d,network}
+    install -vm755 -d "$P"/usr/{lib,share}/pkgconfig
+    install -vm755 -d "$P/usr/sbin" "$P/usr/include" "$P/usr/bin"
+    install -vm755 udevadm       "$P/usr/bin/"
+    install -vm755 systemd-hwdb  "$P/usr/bin/udev-hwdb"
+    ln -svfn ../bin/udevadm      "$P/usr/sbin/udevd"
+    cp -av libudev.so{,*[0-9]}   "$P/usr/lib/"
+    install -vm644 ../src/libudev/libudev.h "$P/usr/include/"
+    install -vm644 src/libudev/*.pc         "$P/usr/lib/pkgconfig/"
+    install -vm644 src/udev/*.pc            "$P/usr/share/pkgconfig/"
+    install -vm644 ../src/udev/udev.conf    "$P/etc/udev/"
+    install -vm644 rules.d/* ../rules.d/README "$P/usr/lib/udev/rules.d/"
+    install -vm644 $(find ../rules.d/*.rules -not -name '*power-switch*') \
+        "$P/usr/lib/udev/rules.d/"
+    install -vm644 hwdb.d/* ../hwdb.d/{*.hwdb,README} \
+        "$P/usr/lib/udev/hwdb.d/"
+    install -vm755 $udev_helpers "$P/usr/lib/udev"
+    install -vm644 ../network/99-default.link "$P/usr/lib/udev/network"
+
+    # 書 8.78 pre 8：udev-lfs 三支輔助腳本
+    rm -rf "${srcdir}/udev-lfs-extract"; mkdir -p "${srcdir}/udev-lfs-extract"
+    tar -xf "${srcdir}/udev-lfs-20230818.tar.xz" -C "${srcdir}/udev-lfs-extract"
+    install -vm755 \
+        "${srcdir}/udev-lfs-extract/udev-lfs-20230818/"{init-net-rules.sh,write_net_rules,rule_generator.functions} \
+        "$P/usr/lib/udev"
+
+    # 書 8.78 pre 9：預編好的 systemd man pages，只取 udev 相關並改名
+    install -d "$P/usr/share/man"
+    tar -xf "${srcdir}/systemd-man-pages-${pkgver}.tar.xz"               \
+        --no-same-owner --strip-components=1                              \
+        -C "$P/usr/share/man" --wildcards '*/udev*' '*/libudev*'          \
+                              '*/systemd.link.5'                          \
+                              '*/systemd-'{hwdb,udevd.service}.8
+    sed 's|systemd/network|udev/network|' \
+        "$P/usr/share/man/man5/systemd.link.5" > "$P/usr/share/man/man5/udev.link.5"
+    sed 's/systemd\(\\\?-\)/udev\1/' \
+        "$P/usr/share/man/man8/systemd-hwdb.8" > "$P/usr/share/man/man8/udev-hwdb.8"
+    sed 's|lib.*udevd|sbin/udevd|' \
+        "$P/usr/share/man/man8/systemd-udevd.service.8" > "$P/usr/share/man/man8/udevd.8"
+    rm -f "$P"/usr/share/man/man*/systemd*
+
+    # 書 8.78 pre 14：32 位只取 libudev
+    cd ../build32
+    install -d "$P/usr/lib32/pkgconfig"
+    cp -av libudev.so{,*[0-9]} "$P/usr/lib32/"
+    cp src/libudev/libudev.pc  "$P/usr/lib32/pkgconfig/"
+
+    # 書 8.78 pre 15 `udev-hwdb update` 是對已安裝系統產生 /etc/udev/hwdb.bin，
+    # 移到 udev.install（規則 12）。
+}

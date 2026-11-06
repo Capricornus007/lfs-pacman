@@ -1,37 +1,42 @@
+# MLFS 8.69 Kbd-2.10.0 —— §8.69（backspace 補丁）
 pkgname=kbd
-pkgver=2.0.4
+pkgver=2.10.0
 pkgrel=1
-pkgdesc="Keytable files and keyboard utilities"
+pkgdesc="鍵盤映射表與控制台工具"
 arch=('x86_64')
-url="http://www.kbd-project.org/"
-license=('GPL')
+url="https://kbd-project.org/"
+license=('GPL-2.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Bash, Coreutils, and Glibc
+depends=('bash' 'coreutils' 'glibc')
 source=(${pkgname}-${pkgver}.tar.xz
-	kbd-2.0.4-backspace-1.patch)
+        ${pkgname}-${pkgver}-backspace-1.patch)
+md5sums=('77ff950dfa4c34fdf41125547bfa831a'
+         'f75cca16a38da6caa7d52151f7136895')
 
 prepare() {
-    cd "${pkgname}-${pkgver}"
-
-    patch -Np1 -i ../kbd-2.0.4-backspace-1.patch
-
-    sed -i 's/\(RESIZECONS_PROGS=\)yes/\1no/g' configure
+    cd ${pkgname}-${pkgver}
+    # 書 8.69 pre 1–2
+    patch -Np1 -i ../${pkgname}-${pkgver}-backspace-1.patch
+    sed -i '/RESIZECONS_PROGS=/s/yes/no/' configure
     sed -i 's/resizecons.8 //' docs/man/man8/Makefile.in
 }
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    PKG_CONFIG_PATH=/tools/lib/pkgconfig ./configure --prefix=/usr --disable-vlock
+    cd ${pkgname}-${pkgver}
+    # 書 8.69 pre 3–4（舊模板的 PKG_CONFIG_PATH=/tools 是過時手法，規則 13）
+    ./configure --prefix=/usr --disable-vlock
     make
 }
 
 check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
+    cd ${pkgname}-${pkgver} && make check
 }
 
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
-
-    install -vdm755 ${pkgdir}/usr/share/doc/kbd-${pkgver}
-    cp -Rv docs/doc/* ${pkgdir}/usr/share/doc/kbd-${pkgver}
+    cd ${pkgname}-${pkgver}
+    # 書 8.69 pre 6–7
+    make DESTDIR="${pkgdir}" install
+    install -d "${pkgdir}/usr/share/doc/kbd-2.10.0"
+    cp -R -v docs/doc/. "${pkgdir}/usr/share/doc/kbd-2.10.0/"
 }

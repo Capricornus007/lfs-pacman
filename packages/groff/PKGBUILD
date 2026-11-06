@@ -1,19 +1,31 @@
+# MLFS 8.65 Groff-1.24.2 —— §8.65
+# 書寫 `PAGE=<paper_size>` 由施工者選紙張；沿用舊模板的 A4（台灣/中國慣用）。
 pkgname=groff
-pkgver=1.22.3
+pkgver=1.24.2
 pkgrel=1
-pkgdesc="GNU troff text-formatting system"
+pkgdesc="GNU troff 文字排版系統"
 arch=('x86_64')
-url="http://www.gnu.org/software/groff/groff.html"
-license=('GPL')
+url="https://www.gnu.org/software/groff/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=GCC, Glibc, and Perl
+depends=('gcc' 'glibc' 'perl')
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('4568a9c35000784246cfebff8e93121a')
 
 build() {
-    cd "${pkgname}-${pkgver}"
+    cd ${pkgname}-${pkgver}
+    # 書 8.65 pre 1–2
     PAGE=A4 ./configure --prefix=/usr
     make -j1
 }
 
+check() {
+    cd ${pkgname}-${pkgver} && make check
+}
+
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.65 pre 4
+    make DESTDIR="${pkgdir}" install
 }

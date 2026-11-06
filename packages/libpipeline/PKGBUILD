@@ -1,24 +1,26 @@
+# MLFS 8.70 Libpipeline-1.5.8 —— §8.70
 pkgname=libpipeline
-pkgver=1.4.2
+pkgver=1.5.8
 pkgrel=1
-pkgdesc="a C library for manipulating pipelines of subprocesses in a flexible and convenient way"
+pkgdesc="子行程管線操作 C 函式庫（man-db 用）"
 arch=('x86_64')
-url="http://libpipeline.nongnu.org/"
-license=('GPL')
+url="https://libpipeline.nongnu.org/"
+license=('GPL-3.0-or-later')
+options=(!strip !debug !lto)
+# 依賴附錄 RUN=Glibc
+depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.gz)
+md5sums=('17ac6969b2015386bcb5d278a08a40b5')
 
 build() {
-    cd "${pkgname}-${pkgver}"
-    PKG_CONFIG_PATH=/tools/lib/pkgconfig ./configure --prefix=/usr
+    cd ${pkgname}-${pkgver}
+    # 書 8.70 pre 1–2
+    ./configure --prefix=/usr
     make
 }
 
-check() {
-    cd "${pkgname}-${pkgver}"
-    make check 2>&1 | tee ${pkgname}-${pkgver}-check-log
-}
-
 package() {
-    cd "${pkgname}-${pkgver}"
-    make DESTDIR=${pkgdir} install
+    cd ${pkgname}-${pkgver}
+    # 書 8.70 pre 3
+    make DESTDIR="${pkgdir}" install
 }

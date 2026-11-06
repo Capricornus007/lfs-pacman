@@ -1,0 +1,16 @@
+# MLFS 8.78.3：由已安裝的 hwdb.d 產生 /etc/udev/hwdb.bin
+# 書原文 `udev-hwdb update`，並註明「每次硬體資訊更新後都要重跑」。
+# 作用對象是運行中系統，純 DESTDIR 打包做不到，故歸 .install（手冊 §7.4 規則 12）。
+_udev_hwdb_update() {
+    if command -v udev-hwdb >/dev/null 2>&1; then
+        udev-hwdb update || true
+    fi
+}
+
+post_install() {
+    _udev_hwdb_update
+}
+
+post_upgrade() {
+    _udev_hwdb_update
+}

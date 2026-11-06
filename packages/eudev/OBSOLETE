@@ -1,0 +1,10 @@
+OBSOLETE — DO NOT BUILD / 請勿使用本目錄
+
+MLFS 現行書（dev-openrc #3d658）第 8.78 節已把 eudev 改名為
+「Udev from Systemd-262.1」，正確配方在 ../udev/。
+
+本目錄是 2017 年 benvd/lfs-pacman 的舊模板（eudev 3.2.2），
+版本、來源、建置方式全部過時，且 pacman 帳本裡沒有這個包名。
+保留僅供歷史參考；格式化後照 §7.4 批次 6 構建時，必須用 ../udev/。
+
+詳見手冊 §7.3、§7.4 規則 13。
