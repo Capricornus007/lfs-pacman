@@ -51,4 +51,13 @@ package() {
     DESTDIR="${srcdir}/kmod-m32" ninja install
     install -d "${pkgdir}/usr/lib32"
     cp -Rv "${srcdir}/kmod-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
+
+    # 內核 CONFIG_MODPROBE_PATH="/sbin/modprobe"（本機 /proc/config.gz 實測）：
+    # 核心自動載模組時直接 exec /sbin/modprobe，不存在就靜默失靈。
+    # MLFS usrmerge 下 /sbin→usr/bin 是指向 /usr 的符號連結（§5.4 之後由檔案系統保證），
+    # 這裡在套件裡直接補 kmod 多裝名字的符號連結，跟 Artix/Arch kmod 包同法。
+    install -d "${pkgdir}/sbin"
+    for m in kmod modprobe depmod insmod rmmod lsmod modinfo; do
+        ln -svf ../usr/bin/kmod "${pkgdir}/sbin/$m"
+    done
 }

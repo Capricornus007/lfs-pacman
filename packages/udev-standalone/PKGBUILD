@@ -16,6 +16,7 @@ depends=('glibc')
 makedepends=('gcc' 'make')
 install=udev-standalone.install
 backup=('etc/udev/udev.conf'
+        'etc/udev/rules.d/40-auto-modalias.rules'
         'etc/udev/rules.d/50-default.rules'
         'etc/udev/rules.d/60-persistent-storage.rules'
         'etc/udev/rules.d/60-persistent-input.rules'
@@ -23,7 +24,7 @@ backup=('etc/udev/udev.conf'
 source=("udev-standalone-${pkgver}.tar.gz"
         "libudev-standalone-${pkgver}.tar.gz"
         "udev-lfs-20230818.tar.xz")
-sha256sums=('a85327a0c0433b248135528cb684f9dc8b015dea29caa11a20e8c6032739665a'
+sha256sums=('e6899df52e056cc4bc536ca4007cf6fc77945819eb9c15c4092bfbf57d18af54'
             '6c07c86ea2255ad82fd77ea660c71792bdc95329680b5ebeebdf3f84d958f3e3'
             '104cdde52a898c648ce346a9ed1fbe9297514656534636a6584132cf2d7428d9')
 
@@ -83,6 +84,8 @@ package() {
     fi
 
     install -m644 "udev-standalone-${pkgver}"/rules/*.rules "$P/etc/udev/rules.d/"
+    # 40-auto-modalias.rules 的 RUN+ 載體（MODALIAS→modprobe；無 libkmod 的替代件）
+    install -m755 "udev-standalone-${pkgver}/rules/udev-auto-modprobe" "$P/usr/lib/udev/"
     install -m644 "udev-standalone-${pkgver}/hwdb.d/README" "$P/usr/lib/udev/hwdb.d/README"
     install -m755 udev-lfs-20230818/init-net-rules.sh "$P/usr/lib/udev/"
     install -m755 udev-lfs-20230818/write_net_rules "$P/usr/lib/udev/"
