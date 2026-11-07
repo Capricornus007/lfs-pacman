@@ -23,7 +23,7 @@ backup=('etc/udev/udev.conf'
 source=("udev-standalone-${pkgver}.tar.gz"
         "libudev-standalone-${pkgver}.tar.gz"
         "udev-lfs-20230818.tar.xz")
-sha256sums=('b31b653f92096f1675c4a51dd2eb01cd5233fa5079ede5d7660efbf3c8022ad6'
+sha256sums=('19d094d77d0d302c75740eb36d3b42e84e3c7351d83a890d8ef56f3c22ca44cc'
             'db989f3a762bbcdc48c670d2d1bd9dd8c2aa524f9ab8f378b3e3815f831777c3'
             '104cdde52a898c648ce346a9ed1fbe9297514656534636a6584132cf2d7428d9')
 
