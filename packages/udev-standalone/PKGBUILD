@@ -1,0 +1,97 @@
+# udev-standalone —— clean-room udev 裝置管理員＋libudev（MLFS 8.78 替代配方）
+# 來源只有本專案兩個倉＋LFS 的 udev-lfs 輔助腳本；不含、也不建置任何 systemd 檔案。
+# 規則與 hwdb 目錄由本專案自寫（rules/、hwdb.d/），不帶任何上游規則資料。
+pkgname=udev-standalone
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="clean-room udev 裝置管理員與 libudev（systemd-free、TBWTFPL）"
+arch=('x86_64')
+url="https://github.com/Capricornus007"
+license=('custom:TBWTFPL' 'GPL-2.0-or-later')
+options=(!strip !debug !lto)
+provides=('udev' 'libudev' 'libudev.so=1-64' 'libudev.so=1-32')
+conflicts=('udev')
+replaces=('udev')
+depends=('glibc')
+makedepends=('gcc' 'make')
+install=udev-standalone.install
+backup=('etc/udev/udev.conf'
+        'etc/udev/rules.d/50-default.rules'
+        'etc/udev/rules.d/60-persistent-storage.rules'
+        'etc/udev/rules.d/60-persistent-input.rules'
+        'etc/udev/rules.d/60-persistent-net.rules')
+source=("udev-standalone-${pkgver}.tar.gz"
+        "libudev-standalone-${pkgver}.tar.gz"
+        "udev-lfs-20230818.tar.xz")
+sha256sums=('6103ad6eb36867e0e9e21a9888b714a2819c2be84f4cfed80c247cc8479b2655'
+            'db989f3a762bbcdc48c670d2d1bd9dd8c2aa524f9ab8f378b3e3815f831777c3'
+            '104cdde52a898c648ce346a9ed1fbe9297514656534636a6584132cf2d7428d9')
+
+build() {
+    make -C "udev-standalone-${pkgver}" clean
+    make -C "udev-standalone-${pkgver}" CFLAGS="-O2 -Wall -Wextra -std=c99"
+
+    make -C "libudev-standalone-${pkgver}" clean
+    make -C "libudev-standalone-${pkgver}"
+
+    # lib32：批次 1 的 glibc 已建好 multilib；沒有 /usr/lib32 時明確警告並跳過
+    if [ -d /usr/lib32 ]; then
+        rm -rf lib32
+        cp -a "libudev-standalone-${pkgver}" lib32
+        make -C lib32 clean
+        make -C lib32 CFLAGS="-O2 -Wall -Wextra -std=c99 -fPIC -m32" libudev.so
+    else
+        warning "no /usr/lib32: building without 32-bit libudev"
+    fi
+}
+
+check() {
+    cd "udev-standalone-${pkgver}"
+    ./udev --version
+    ./udev verify rules
+    ./udev --test test/uevent-sample.txt >/dev/null
+}
+
+package() {
+    P="$pkgdir"
+    install -d "$P/usr/bin" "$P/usr/sbin" "$P/usr/lib" "$P/usr/include" \
+               "$P/usr/lib/pkgconfig" "$P/usr/share/pkgconfig" \
+               "$P/usr/lib/udev" "$P/usr/lib/udev/hwdb.d" \
+               "$P/etc/udev/rules.d" "$P/etc/udev/hwdb.d"
+
+    install -m755 "udev-standalone-${pkgver}/udev" "$P/usr/bin/udev"
+    ln -sf udev          "$P/usr/bin/udevadm"
+    ln -sf udev          "$P/usr/bin/udev-hwdb"
+    ln -sf ../bin/udev   "$P/usr/sbin/udevd"
+
+    cd "libudev-standalone-${pkgver}"
+    install -m755 libudev.so.1.0.0 "$P/usr/lib/"
+    ln -sf libudev.so.1.0.0 "$P/usr/lib/libudev.so.1"
+    ln -sf libudev.so.1     "$P/usr/lib/libudev.so"
+    install -m644 src/udev.h "$P/usr/include/libudev.h"
+    install -m644 libudev.pc "$P/usr/lib/pkgconfig/"
+    install -m644 udev.pc    "$P/usr/share/pkgconfig/"
+    cd ..
+
+    if [ -f lib32/libudev.so.1.0.0 ]; then
+        install -d "$P/usr/lib32/pkgconfig"
+        install -m755 lib32/libudev.so.1.0.0 "$P/usr/lib32/"
+        ln -sf libudev.so.1.0.0 "$P/usr/lib32/libudev.so.1"
+        ln -sf libudev.so.1     "$P/usr/lib32/libudev.so"
+        sed 's|libdir=${prefix}/lib|libdir=${prefix}/lib32|' \
+            "libudev-standalone-${pkgver}/libudev.pc" > "$P/usr/lib32/pkgconfig/libudev.pc"
+    fi
+
+    install -m644 "udev-standalone-${pkgver}"/rules/*.rules "$P/etc/udev/rules.d/"
+    install -m644 "udev-standalone-${pkgver}/hwdb.d/README" "$P/usr/lib/udev/hwdb.d/README"
+    install -m755 udev-lfs-20230818/init-net-rules.sh "$P/usr/lib/udev/"
+    install -m755 udev-lfs-20230818/write_net_rules "$P/usr/lib/udev/"
+    install -m644 udev-lfs-20230818/rule_generator.functions "$P/usr/lib/udev/"
+    printf '# udev.conf for udev-standalone (no options are read yet)\n' > "$P/etc/udev/udev.conf"
+
+    # hard gate: a systemd-named file anywhere in the package fails the build
+    if find "$P" -iname '*systemd*' | grep -q .; then
+        error "systemd-named file found in the package tree"
+        return 1
+    fi
+}
