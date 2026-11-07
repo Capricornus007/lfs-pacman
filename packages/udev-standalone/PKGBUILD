@@ -4,7 +4,7 @@
 pkgname=udev-standalone
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="clean-room udev 裝置管理員與 libudev（systemd-free、TBWTFPL）"
+pkgdesc="clean-room udev 裝置管理員與 libudev（TBWTFPL）"
 arch=('x86_64')
 url="https://github.com/Capricornus007"
 license=('custom:TBWTFPL' 'GPL-2.0-or-later')
@@ -23,8 +23,8 @@ backup=('etc/udev/udev.conf'
 source=("udev-standalone-${pkgver}.tar.gz"
         "libudev-standalone-${pkgver}.tar.gz"
         "udev-lfs-20230818.tar.xz")
-sha256sums=('19d094d77d0d302c75740eb36d3b42e84e3c7351d83a890d8ef56f3c22ca44cc'
-            'db989f3a762bbcdc48c670d2d1bd9dd8c2aa524f9ab8f378b3e3815f831777c3'
+sha256sums=('a85327a0c0433b248135528cb684f9dc8b015dea29caa11a20e8c6032739665a'
+            '6c07c86ea2255ad82fd77ea660c71792bdc95329680b5ebeebdf3f84d958f3e3'
             '104cdde52a898c648ce346a9ed1fbe9297514656534636a6584132cf2d7428d9')
 
 build() {
@@ -89,9 +89,13 @@ package() {
     install -m644 udev-lfs-20230818/rule_generator.functions "$P/usr/lib/udev/"
     printf '# udev.conf for udev-standalone (no options are read yet)\n' > "$P/etc/udev/udev.conf"
 
-    # hard gate: a systemd-named file anywhere in the package fails the build
+    # hard gate: no systemd-named file and no systemd text in the installed tree
     if find "$P" -iname '*systemd*' | grep -q .; then
         error "systemd-named file found in the package tree"
+        return 1
+    fi
+    if grep -ril 'systemd' "$P" | grep -q .; then
+        error "systemd text found in the installed tree"
         return 1
     fi
 }
