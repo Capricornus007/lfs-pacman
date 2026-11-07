@@ -1,30 +1,33 @@
-#!/bin/sh
-# feed-bot 用：在 archlinux 容器內逐配方構建（容器＝隔離，不污染任何系統；取代 chroot）
-# 用法：build-recipe.sh <packages/下的目錄名>… ；失敗即紅（exit≠0）
-set -e
-SRC_GIT="https://github.com/Capricornus007/lfs-pacman.git"
-SRC_DIR="$(dirname "$0")/../ci-sources-cache"
-mkdir -p "$SRC_DIR"
-fetch_source() { # $1=檔名 $2=md5 → 本地快取優先，缺就從盤上清單對應 URL 抓
-  local f=$1 md5=$2 u
-  if [ -s "$SRC_DIR/$f" ] && { [ -z "$md5" ] || [ "$(md5sum "$SRC_DIR/$f" | cut -d' ' -f1)" = "$md5" ]; }; then
-    cp "$SRC_DIR/$f" .; return 0
-  fi
-  # URL 由配方 source=() 給出；CI 環境直連鏡像
-  u="$3"
-  [ -n "$u" ] || { echo "缺來源且無 URL：$f"; return 1; }
-  curl -fL --retry 6 --retry-delay 4 -o "$f" "$u"
-  if [ -n "$md5" ]; then
-    echo "$md5  $f" | md5sum -c - || { echo "md5 不符：$f"; return 1; }
-  fi
-  cp "$f" "$SRC_DIR/$f"
-}
-fail=0
-for p in "$@"; do
-  echo "==================== $p ===================="
-  cd "$(dirname "$0")/.."; cd "packages/$p" || { echo "無配方目錄 $p"; fail=1; continue; }
-  su builder -c "cd '$PWD' && makepkg -fs --noconfirm --skipchecksums 2>&1 | tail -30" || { echo "FAIL: $p"; fail=1; continue; }
-  echo "OK: $p"
-  cd - >/dev/null
-done
-exit $fail
+#!/bin/bash
+# feed-bot 專用：容器隔離構建一個配方（取代 chroot）。
+# 用法: build-recipe.sh <pkgdir 名> [新版本號]
+# 流程: 依 ci/sources.urls.json 抓來源（新版本號時自動換檔名）→ updpkgsums 更新校驗 → makepkg -fs
+set -uo pipefail
+name=$1; newver=${2:-}
+root="$(cd "$(dirname "$0")/.." && pwd)"
+pdir="$root/packages/$name"
+[ -d "$pdir" ] || { echo "無配方 $name"; exit 1; }
+cd "$pdir"
+[ -n "$newver" ] && { sed -i -E "s/^pkgver=.*/pkgver=$newver/" PKGBUILD; echo "pkgver→$newver"; }
+
+# 抓來源：解析 source=() 檔名 → URL 表查 URL（檔名含版本時用 PKGBUILD 的 pkgver 展開）
+pv=$(sed -n 's/^pkgver=//p' PKGBUILD | head -1)
+python3 - "$pv" <<'PY'
+import re,sys,json,os,subprocess
+pv=sys.argv[1]
+urls=json.load(open(os.environ.get("URLS","ci-sources-cache/../ci/sources.urls.json"))) if os.path.exists("ci-sources-cache") else json.load(open("../ci/sources.urls.json"))
+t=open("PKGBUILD",encoding="utf-8").read()
+m=re.search(r'^source=\(([^)]*)\)',t,re.M|re.S)
+if not m: sys.exit(0)
+srcs=re.findall(r'"?([\w.+-]+\.(?:tar\.(?:xz|gz|bz2|zst)|zip))"?',m.group(1).replace("${pkgver}",pv).replace("$pkgver",pv))
+for s in srcs:
+    if os.path.exists(s): continue
+    u=urls.get(s)
+    if not u: print("無URL:",s); sys.exit(1)
+    print("wget:",u)
+    subprocess.run(["curl","-fsSLO","--retry","8","--retry-delay","3","--connect-timeout","25",u],check=True)
+    if os.path.basename(u)!=s: os.rename(os.path.basename(u),s)
+PY
+chown -R builder . 2>/dev/null || true
+su builder -c "cd '$pdir' && updpkgsums && makepkg -fs --noconfirm" || { echo "構建失敗：$name"; exit 1; }
+echo "OK：$name $(ls "$pdir"/*.pkg.tar.zst)"
