@@ -12,10 +12,10 @@ cd "$pdir"
 
 # 抓來源：解析 source=() 檔名 → URL 表查 URL（檔名含版本時用 PKGBUILD 的 pkgver 展開）
 pv=$(sed -n 's/^pkgver=//p' PKGBUILD | head -1)
-python3 - "$pv" <<'PY'
+ROOT="$root" python3 - "$pv" <<'PY'
 import re,sys,json,os,subprocess
 pv=sys.argv[1]
-urls=json.load(open(os.environ.get("URLS","ci-sources-cache/../ci/sources.urls.json"))) if os.path.exists("ci-sources-cache") else json.load(open("../ci/sources.urls.json"))
+urls=json.load(open(os.environ.get("URLS", os.path.join(os.environ["ROOT"], "ci/sources.urls.json"))))
 t=open("PKGBUILD",encoding="utf-8").read()
 m=re.search(r'^source=\(([^)]*)\)',t,re.M|re.S)
 if not m: sys.exit(0)
