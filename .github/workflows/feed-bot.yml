@@ -87,9 +87,10 @@ jobs:
       - name: 套用 znver3（64／32 位）＋ runner 探測
         run: |
           # makepkg.conf 覆寫：64 位與 -m32 共用 znver3 -O3 + LTO。
-          # makepkg 的 check_option() 對 "!lto" 優先，光 append lto 不會生效，
-          # 必須先把 !lto 換掉；Arch 容器若完全沒列 lto 再補 OPTIONS+=(lto)。
+          # makepkg 的 check_option() 對 "!lto" 優先；PKGBUILD 的 !lto 還會壓過 makepkg.conf 的 lto，
+          # 所以兩邊都要換。Arch 容器若 makepkg.conf 完全沒列 lto 再補 OPTIONS+=(lto)。
           sed -i 's/!lto/lto/g' /etc/makepkg.conf
+          sed -i 's/!lto/lto/g' packages/*/PKGBUILD
           grep -qE '^OPTIONS=\(.*lto' /etc/makepkg.conf || echo 'OPTIONS+=(lto)' >> /etc/makepkg.conf
           cat ci/makepkg-flags.conf >> /etc/makepkg.conf
           # 編譯器外掛：連 Makefile 寫死 CFLAGS、硬寫 -march=i686 的配方也吃到。
