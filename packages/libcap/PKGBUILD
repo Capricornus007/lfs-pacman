@@ -24,28 +24,30 @@ prepare() {
 
 build() {
     cd ${pkgname}-${pkgver}
-    # 書 8.29 pre 2
-    make prefix=/usr lib=lib
+    # 書 8.29 pre 2。PAM_CAP=no：Arch 容器有 64 位 pam，libcap 的
+    # Make.Rules 會自動編 pam_cap.so 並 -lpam；MLFS 書本系統沒有 PAM，
+    # 且 multilib 沒有 lib32-pam，32 位會直接連結失敗。書本流程本就不建它。
+    make prefix=/usr lib=lib PAM_CAP=no
 
     cd ../build32
     # 書 8.29 pre 6
-    make CC="gcc -m32 -march=znver3 -mtune=znver3"
+    make CC="gcc -m32 -march=znver3 -mtune=znver3" PAM_CAP=no
 }
 
 check() {
-    cd ${pkgname}-${pkgver} && make test
+    cd ${pkgname}-${pkgver} && make test PAM_CAP=no
 }
 
 package() {
     cd ${pkgname}-${pkgver}
     # 書 8.29 pre 4：make prefix=/usr lib=lib install → DESTDIR 化
     # RAISE_SETFCAP=no：fakeroot 下不可對套件檔做 setcap（沿用舊模板的實證手法）
-    make DESTDIR="${pkgdir}" RAISE_SETFCAP=no lib=lib prefix=/usr install
+    make DESTDIR="${pkgdir}" RAISE_SETFCAP=no lib=lib prefix=/usr PAM_CAP=no install
 
     cd ../build32
     # 書 8.29 pre 7：prefix 指向暫存樹，只取 lib32
     rm -rf "${srcdir}/libcap-m32"
-    make CC="gcc -m32 -march=znver3 -mtune=znver3" lib=lib32 \
+    make CC="gcc -m32 -march=znver3 -mtune=znver3" PAM_CAP=no lib=lib32 \
          prefix="${srcdir}/libcap-m32/usr" -C libcap install
     install -d "${pkgdir}/usr/lib32"
     cp -av "${srcdir}/libcap-m32/usr/lib32/." "${pkgdir}/usr/lib32/"
