@@ -75,7 +75,15 @@ package() {
     ln -sv gcc.1 "${pkgdir}/usr/share/man/man1/cc.1"
     # 書 8.33 pre 13：書用 $(gcc -print-prog-name=liblto_plugin.so) 指向「剛裝好的 gcc」；
     # DESTDIR 下該 gcc 尚未在 PATH，改從 $pkgdir 找出實際檔案再建相對連結。
-    plugin=$(find "${pkgdir}/usr/lib/gcc" -name liblto_plugin.so -print -quit)
+    # 本 PKGBUILD 的 configure 未設 --libexecdir，gcc 預設把 liblto_plugin.so 裝到
+    # $pkgdir/usr/libexec/gcc/<target>/<ver>/（而非 usr/lib/gcc），故兩處都要找；
+    # 找不到就直接報錯（不再建空目標的斷鏈，否則 makepkg 仍會失敗且訊息更難懂）。
+    plugin=$(find "${pkgdir}/usr/lib/gcc" "${pkgdir}/usr/libexec/gcc" \
+                  "${pkgdir}/usr/lib64/gcc" -name liblto_plugin.so -print -quit 2>/dev/null)
+    if [ -z "$plugin" ]; then
+        echo "ERROR: liblto_plugin.so not found under $pkgdir/usr/{lib,libexec}/gcc" >&2
+        return 1
+    fi
     install -vdm755 "${pkgdir}/usr/lib/bfd-plugins"
     ln -svr "${plugin}" "${pkgdir}/usr/lib/bfd-plugins/"
     # 書 8.33 pre 27
