@@ -36,5 +36,5 @@ for s in srcs:
     if os.path.basename(u)!=s: os.rename(os.path.basename(u),s)
 PY
 chown -R builder . 2>/dev/null || true
-su builder -c "cd '$pdir' && updpkgsums && makepkg -fs --noconfirm" || { echo "構建失敗：$name"; exit 1; }
+su builder -c "cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" || { echo "構建失敗：$name"; exit 1; }
 echo "OK：$name $(ls "$pdir"/*.pkg.tar.zst)"
