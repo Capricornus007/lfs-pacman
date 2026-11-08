@@ -45,15 +45,34 @@ jobs:
           total=$(wc -l < /tmp/list)
           awk '{print NR"\t"$0}' /tmp/list > /tmp/list.indexed
           chmod +x ci/build-recipe.sh ci/scan-updates.py
+          : > /tmp/results.tsv
           # xargs -n2 給每包 index/name；TOTAL 讓子殼顯示進度
+          set +e
           TOTAL="$total" xargs -a /tmp/list.indexed -n2 -P2 bash -c '
             i=$1; name=$2
             echo "[$i/$TOTAL] START $name"
             ci/build-recipe.sh "$name"; rc=$?
-            if [ $rc -eq 0 ]; then echo "[$i/$TOTAL] OK $name"; else echo "[$i/$TOTAL] FAIL $name"; fi
+            if [ $rc -eq 0 ]; then
+              echo "[$i/$TOTAL] OK $name"
+              printf "%s\tOK\t%s\n" "$i" "$name" >> /tmp/results.tsv
+            else
+              echo "[$i/$TOTAL] FAIL $name"
+              printf "%s\tFAIL\t%s\n" "$i" "$name" >> /tmp/results.tsv
+            fi
             exit $rc
           ' _
-          echo "DONE total=$total"
+          rc=$?
+          {
+            echo "## feed-bot 進度"
+            echo ""
+            echo "total: **$total**  packages"
+            echo ""
+            echo "| # | result | package |"
+            echo "|---|---|---|"
+            sort -n /tmp/results.tsv | awk -F'\t' '{printf "| %s | %s | %s |\n",$1,$2,$3}'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "DONE total=$total rc=$rc"
+          exit $rc
       - name: 合併成 feed 併發佈 release
         if: steps.scan.outputs.changed != '0'
         run: |
