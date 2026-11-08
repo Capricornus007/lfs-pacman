@@ -44,9 +44,19 @@ package() {
     cd ${pkgname}-${pkgver}/build
     # 書 8.84 pre 6；規則 10：DESTDIR 必須前置為環境變數
     DESTDIR="${pkgdir}" ninja install
-    # 書 8.84 pre 6 尾：rc-update 從 sbin 移到 bin
+    # 書 8.84 pre 6 尾：rc-update 從 sbin 移到 bin。
+    # 0.63.3 的 meson 裝到 $pkgdir/sbin（不是 usr/sbin），書本版次裝到 usr/sbin；
+    # 兩邊都認，且已在本來位置時不重複搬。
     install -d "${pkgdir}/usr/bin"
-    mv -v "${pkgdir}/usr/sbin/rc-update" "${pkgdir}/usr/bin/rc-update"
+    if [ ! -f "${pkgdir}/usr/bin/rc-update" ]; then
+        for d in sbin usr/sbin bin; do
+            if [ -f "${pkgdir}/$d/rc-update" ]; then
+                mv -v "${pkgdir}/$d/rc-update" "${pkgdir}/usr/bin/rc-update"
+                break
+            fi
+        done
+    fi
+    test -f "${pkgdir}/usr/bin/rc-update" || { echo "找不到 rc-update"; return 1; }
     # 書 8.84 pre 7：init/shutdown 連結與 poweroff/reboot 腳本
     install -d "${pkgdir}/sbin"
     for i in init shutdown; do

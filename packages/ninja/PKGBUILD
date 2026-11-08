@@ -36,6 +36,8 @@ build() {
 package() {
     cd ${pkgname}-${pkgver}
     # 書 8.20：三個 install 照抄，DESTDIR 化
+    # install -m755 到目錄結尾不會自動建目錄，先補 -d（fakeroot 下必做）。
+    install -d "${pkgdir}/usr/bin"
     install -vm755 ninja "${pkgdir}/usr/bin/"
     install -vDm644 misc/bash-completion "${pkgdir}/usr/share/bash-completion/completions/ninja"
     install -vDm644 misc/zsh-completion  "${pkgdir}/usr/share/zsh/site-functions/_ninja"

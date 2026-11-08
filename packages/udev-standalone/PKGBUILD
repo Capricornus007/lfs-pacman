@@ -30,7 +30,7 @@ sha256sums=('e6899df52e056cc4bc536ca4007cf6fc77945819eb9c15c4092bfbf57d18af54'
 
 build() {
     make -C "udev-standalone-${pkgver}" clean
-    make -C "udev-standalone-${pkgver}" CFLAGS="-O2 -Wall -Wextra -std=c99"
+    make -C "udev-standalone-${pkgver}" CFLAGS="-O2 -Wall -Wextra -std=c99 -march=znver3 -mtune=znver3"
 
     make -C "libudev-standalone-${pkgver}" clean
     make -C "libudev-standalone-${pkgver}"
@@ -40,7 +40,7 @@ build() {
         rm -rf lib32
         cp -a "libudev-standalone-${pkgver}" lib32
         make -C lib32 clean
-        make -C lib32 CFLAGS="-O2 -Wall -Wextra -std=c99 -fPIC -m32" libudev.so
+        make -C lib32 CFLAGS="-O2 -Wall -Wextra -std=c99 -fPIC -m32 -march=znver3 -mtune=znver3" libudev.so
     else
         warning "no /usr/lib32: building without 32-bit libudev"
     fi

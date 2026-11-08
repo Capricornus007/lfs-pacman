@@ -20,6 +20,9 @@ prepare() {
     patch -Np1 -i ../${pkgname}-${pkgver}-install_docs-1.patch
     sed -i 's@\(ln -s -f \)$(PREFIX)/bin/@\1@' Makefile
     sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
+    # 書的 Makefile 自己寫死 CFLAGS=，會蓋掉 makepkg.conf；明確補 znver3，
+    # 讓 64 位與 -m32 的 32 位共用同一目標（兩棵樹都從這裡複製出去）。
+    sed -i 's/^CFLAGS=.*/& -march=znver3 -mtune=znver3/' Makefile Makefile-libbz2_so
     # 兩棵樹：32 位照書 8.7.3（CC=gcc -m32 重編 Makefile-libbz2_so）
     cd "$srcdir"
     rm -rf build32

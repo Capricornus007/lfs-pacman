@@ -36,5 +36,7 @@ for s in srcs:
     if os.path.basename(u)!=s: os.rename(os.path.basename(u),s)
 PY
 chown -R builder . 2>/dev/null || true
-su builder -c "cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" || { echo "構建失敗：$name"; exit 1; }
+# /usr/local/bin 放 znver3 編譯器外掛；su 會重建 PATH，這裡明確帶過去，
+# 確保 makepkg／configure／Makefile 看到的 gcc 都是外掛版（64/32 位一體）。
+su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" || { echo "構建失敗：$name"; exit 1; }
 echo "OK：$name $(ls "$pdir"/*.pkg.tar.zst)"

@@ -19,10 +19,13 @@ prepare() {
 build() {
     cd ${pkgname}-${pkgver}
     # 書 8.10.1：make prefix=/usr（64 位）
-    make prefix=/usr
+    # HAVE_LZ4=0：Arch/MLFS 的 lz4frame.h 已把 contentChecksum_t 改名為
+    # LZ4F_contentChecksum_t，zstd 1.5.7 programs/fileio.c:1424 仍用舊名，
+    # 自動偵測到 liblz4 就會編譯失敗；書本流程不需要 .lz4 支援。
+    make prefix=/usr HAVE_LZ4=0
     cd ../build32
     # 書 8.10.2：CC="gcc -m32" make prefix=/usr
-    CC="gcc -m32" make prefix=/usr
+    CC="gcc -m32" make prefix=/usr HAVE_LZ4=0
 }
 
 check() {

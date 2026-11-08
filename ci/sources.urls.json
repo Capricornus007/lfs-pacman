@@ -94,9 +94,9 @@
  "libarchive-3.8.6.tar.xz": "https://github.com/libarchive/libarchive/releases/download/v3.8.6/libarchive-3.8.6.tar.xz",
  "libpsl-0.21.5.tar.gz": "https://github.com/rockdaboot/libpsl/releases/download/0.21.5/libpsl-0.21.5.tar.gz",
  "libtasn1-4.21.0.tar.gz": "https://ftp.gnu.org/gnu/libtasn1/libtasn1-4.21.0.tar.gz",
- "make-ca-1.16.1.tar.gz": "https://github.com/lfs-book/make-ca/releases/download/v1.16.1/make-ca-1.16.1.tar.gz",
+ "make-ca-1.16.1.tar.gz": "https://github.com/lfs-book/make-ca/archive/v1.16.1/make-ca-1.16.1.tar.gz",
  "p11-kit-0.26.2.tar.xz": "https://github.com/p11-glue/p11-kit/releases/download/0.26.2/p11-kit-0.26.2.tar.xz",
- "pacman-7.1.0.tar.xz": "https://sources.archlinux.org/other/pacman/pacman-7.1.0.tar.xz",
+ "pacman-7.1.0.tar.xz": "https://gitlab.archlinux.org/pacman/pacman/-/releases/v7.1.0/downloads/pacman-7.1.0.tar.xz",
  "meson-1.9.1.tar.gz": "https://github.com/mesonbuild/meson/releases/download/1.9.1/meson-1.9.1.tar.gz",
  "ninja-1.13.1.tar.gz": "https://github.com/ninja-build/ninja/archive/v1.13.1/ninja-1.13.1.tar.gz",
  "openssl-4.0.0.tar.gz": "https://github.com/openssl/openssl/releases/download/openssl-4.0.0/openssl-4.0.0.tar.gz"

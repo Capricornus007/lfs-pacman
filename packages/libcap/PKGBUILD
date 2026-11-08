@@ -29,7 +29,7 @@ build() {
 
     cd ../build32
     # 書 8.29 pre 6
-    make CC="gcc -m32 -march=i686"
+    make CC="gcc -m32 -march=znver3 -mtune=znver3"
 }
 
 check() {
@@ -45,7 +45,7 @@ package() {
     cd ../build32
     # 書 8.29 pre 7：prefix 指向暫存樹，只取 lib32
     rm -rf "${srcdir}/libcap-m32"
-    make CC="gcc -m32 -march=i686" lib=lib32 \
+    make CC="gcc -m32 -march=znver3 -mtune=znver3" lib=lib32 \
          prefix="${srcdir}/libcap-m32/usr" -C libcap install
     install -d "${pkgdir}/usr/lib32"
     cp -av "${srcdir}/libcap-m32/usr/lib32/." "${pkgdir}/usr/lib32/"

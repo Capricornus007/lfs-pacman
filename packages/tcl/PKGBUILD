@@ -15,8 +15,9 @@ md5sums=('acfe0c9f7d0c626ecf026e834a888da6'
          '54d1ff0f5eee4e81e5cdaa4baa343397')
 
 build() {
-    cd tcl${pkgver}/unix
-    # 書 8.17.1 configure 原文
+    # 書 8.17.1：SRCDIR 要停在源碼根（tcl8.6.18），下一步才 cd unix。
+    # 先前誤寫成 cd tcl${pkgver}/unix 又再 cd unix，會噴 "cd: unix: No such file"。
+    cd tcl${pkgver}
     SRCDIR=$(pwd)
     cd unix
     ./configure --prefix=/usr           \
