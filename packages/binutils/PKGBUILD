@@ -28,6 +28,12 @@ build() {
                  --with-system-zlib  \
                  --with-lib-path=/usr/lib \
                  --enable-default-hash-style=gnu
+    # gprofng 走自己的子 configure，其最終連結未帶 LTO plugin →
+    # "plugin needed to handle lto object" + "undefined reference to main"。
+    # 子 configure 後 gprofng/Makefile 已生成，把 -flto 翻成 -fno-lto 只關 gprofng，
+    # ld/as 其餘照吃全域 LTO。
+    find . -path '*/gprofng/*' -name Makefile -exec \
+      sed -i 's/-flto=auto/-fno-lto/g; s/-flto /-fno-lto /g; s/-flto$/-fno-lto/g' {} +
     make tooldir=/usr
 }
 

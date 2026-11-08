@@ -84,20 +84,23 @@ jobs:
       - uses: actions/checkout@v7
       - name: 套用 znver3（64／32 位）＋ runner 探測
         run: |
-          # makepkg.conf 覆寫：64 位與 -m32 共用 znver3 -O3 + LTO。
-          # makepkg 的 check_option() 對 "!lto" 優先；PKGBUILD 的 !lto 還會壓過 makepkg.conf 的 lto，
-          # 所以兩邊都要換。Arch 容器若 makepkg.conf 完全沒列 lto 再補 OPTIONS+=(lto)。
-          # 全域預設開 LTO（makepkg.conf）；再把所有 PKGBUILD 的 !lto 翻成 lto。
-          # 但 base toolchain（gcc/glibc/binutils/grub/openssl）對 LTO 最敏感
-          # （見 ci/makepkg-flags.conf 註解），翻完後這 5 個退回 !lto，
-          # 避免 gprofng 的 LTO 連結炸、及其他 LTO 不相容。其餘 82 包照吃 LTO。
+          # ── 全 91 包開 LTO（硬幹模式）── makepkg 的 check_option() 對 "!lto" 優先；
+          # PKGBUILD 的 !lto 會壓過 makepkg.conf 的 lto，所以兩邊的 !lto 都翻成 lto。
+          # Arch 容器若 makepkg.conf 完全沒列 lto 再補 OPTIONS+=(lto)。
+          # base toolchain 的 LTO 相容性由各包 PKGBUILD 自行處理（gcc→bootstrap-lto、
+          # binutils→只關 gprofng、glibc→關 CET、grub/openssl→照吃全域 LTO）；
+          # 任一包炸就單包修補丁，不再整包退回 !lto。
           sed -i 's/!lto/lto/g' /etc/makepkg.conf
           sed -i 's/!lto/lto/g' packages/*/PKGBUILD
-          for p in gcc glibc binutils grub openssl; do
-            sed -i "s/^options=(.*)/options=(!strip !debug !lto)/" "packages/$p/PKGBUILD"
-          done
           grep -qE '^OPTIONS=\(.*lto' /etc/makepkg.conf || echo 'OPTIONS+=(lto)' >> /etc/makepkg.conf
           cat ci/makepkg-flags.conf >> /etc/makepkg.conf
+          # ── LTO 相容性系統性修正（全 91 包共用）──
+          # 1) LTO 延遲符號解析，--as-needed 據此把「有被用到」的 lib（如 tcl 的 libm）
+          #    從 DT_NEEDED 剃掉，後續連結爆 undefined reference to sin/cos/exp/...。
+          sed -i 's/,--as-needed//g; s/ --as-needed//g' /etc/makepkg.conf
+          # 2) 部分套件（tcl 等）用到 libm 卻未顯式 -lm（其 configure 因 glibc libc
+          #    已提供 sin/cos 誤判不需 -lm）。全域補 -lm，無害且修好整類。
+          sed -i 's|^LDFLAGS="|LDFLAGS="-lm |' /etc/makepkg.conf
           # 編譯器外掛：連 Makefile 寫死 CFLAGS、硬寫 -march=i686 的配方也吃到。
           install -d /usr/local/bin
           install -m755 ci/gcc-znver3.sh /usr/local/bin/gcc-znver3

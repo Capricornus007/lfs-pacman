@@ -48,7 +48,8 @@ build() {
                  --enable-host-pie            \
                  --enable-multilib            \
                  --with-multilib-list=m64,m32 \
-                 --disable-bootstrap          \
+                 --with-build-config=bootstrap-lto \
+                 --enable-lto                 \
                  --disable-fixincludes        \
                  --with-system-zlib
     make
