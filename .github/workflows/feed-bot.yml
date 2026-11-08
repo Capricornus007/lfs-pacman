@@ -52,6 +52,8 @@ jobs:
   build:
     needs: prepare
     if: needs.prepare.outputs.count != '0'
+    # 讓 Actions 矩陣 UI 直接顯示包名，而不是物件內容。
+    name: "build ${{ matrix.pkg.name }} [${{ matrix.pkg.index }}/${{ matrix.pkg.total }}]"
     runs-on: ubuntu-latest
     container:
       image: archlinux/archlinux:latest
