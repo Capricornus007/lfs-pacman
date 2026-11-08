@@ -17,7 +17,9 @@ prepare() {
     # 書 8.23.1：clang++ 兼容 sed（照抄）
     sed -i '/long long t1;/,+1s/()/(...)/' configure
     # 32 位樹（書 8.23.2：distclean 後重 configure；兩棵樹等價且可重入）
-    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+    cd "$srcdir"
+    rm -rf build32
+    cp -a "${pkgname}-${pkgver}" build32
 }
 
 build() {

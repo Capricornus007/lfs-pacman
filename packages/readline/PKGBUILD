@@ -25,7 +25,9 @@ prepare() {
        chars_avail = 1;'      \
     -e '288i\   result = -1;' \
     -i.orig input.c
-    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+    cd "$srcdir"
+    rm -rf build32
+    cp -a "${pkgname}-${pkgver}" build32
 }
 
 build() {

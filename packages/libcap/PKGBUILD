@@ -17,7 +17,9 @@ prepare() {
     # 書 8.29 pre 1
     sed -i '/install -m.*STA/d' libcap/Makefile
     cd ..
-    rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+    cd "$srcdir"
+    rm -rf build32
+    cp -a "${pkgname}-${pkgver}" build32
 }
 
 build() {
