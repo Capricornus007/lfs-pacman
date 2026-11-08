@@ -7,19 +7,26 @@ name=$1; newver=${2:-}
 root="$(cd "$(dirname "$0")/.." && pwd)"
 pdir="$root/packages/$name"
 [ -d "$pdir" ] || { echo "無配方 $name"; exit 1; }
+[ -f "$pdir/OBSOLETE" ] && { echo "SKIP OBSOLETE：$name"; exit 0; }
 cd "$pdir"
+# clean-room 等無法用 URL 表的本地來源（udev-standalone/libudev/udev-lfs）
+[ -d "$root/ci/sources" ] && cp -n "$root"/ci/sources/* . 2>/dev/null || true
 [ -n "$newver" ] && { sed -i -E "s/^pkgver=.*/pkgver=$newver/" PKGBUILD; echo "pkgver→$newver"; }
 
-# 抓來源：解析 source=() 檔名 → URL 表查 URL（檔名含版本時用 PKGBUILD 的 pkgver 展開）
+# 抓來源：解析 source=() 檔名 → URL 表查 URL（$pkgname/$pkgver 都要展開）
 pv=$(sed -n 's/^pkgver=//p' PKGBUILD | head -1)
-ROOT="$root" python3 - "$pv" <<'PY'
+pn=$(sed -n 's/^pkgname=//p' PKGBUILD | head -1 | tr -d '"()' | awk '{print $1}')
+ROOT="$root" python3 - "$pv" "$pn" <<'PY'
 import re,sys,json,os,subprocess
-pv=sys.argv[1]
+pv,pn=sys.argv[1],sys.argv[2]
 urls=json.load(open(os.environ.get("URLS", os.path.join(os.environ["ROOT"], "ci/sources.urls.json"))))
 t=open("PKGBUILD",encoding="utf-8").read()
 m=re.search(r'^source=\(([^)]*)\)',t,re.M|re.S)
 if not m: sys.exit(0)
-srcs=re.findall(r'"?([\w.+-]+\.(?:tar\.(?:xz|gz|bz2|zst)|zip))"?',m.group(1).replace("${pkgver}",pv).replace("$pkgver",pv))
+raw=m.group(1)
+for var,val in (("pkgver",pv),("pkgname",pn)):
+    raw=raw.replace("${"+var+"}",val).replace("$"+var,val)
+srcs=re.findall(r'"?([\w.+-]+\.(?:tar\.(?:xz|gz|bz2|zst)|zip))"?',raw)
 for s in srcs:
     if os.path.exists(s): continue
     u=urls.get(s)
