@@ -3,6 +3,8 @@ name: feed-bot（掃描新版本 → CI 重建 → 入 feed，用戶端只需 pa
 on:
   schedule:
     - cron: "30 1 * * *"   # 每日 09:30 UTC+8
+  push:
+    branches: [master]     # 推到 master 即觸發掃描/重建（公共倉庫免費分鐘數）
   workflow_dispatch:
     inputs:
       force:
