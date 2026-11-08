@@ -24,7 +24,7 @@ jobs:
           echo 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch' > /etc/pacman.d/mirrorlist
           # MLFS 配方有 32 位步驟（gcc -m32）；Arch 容器預設沒開 multilib。
           sed -i '/^#\[multilib\]/,/^#Include = \/etc\/pacman.d\/mirrorlist/ s/^#//' /etc/pacman.conf
-          pacman -Syu --noconfirm --needed base-devel git curl jq python rsync pacman-contrib github-cli lib32-glibc lib32-gcc-libs
+          pacman -Syu --noconfirm --needed base-devel git curl jq python python-pip meson ninja tcl rsync pacman-contrib github-cli lib32-glibc lib32-gcc-libs
           useradd -m builder
       - uses: actions/checkout@v4
       - name: 掃描上游新版本（HEAD 對照書表 URL 的目錄列表）
@@ -35,10 +35,25 @@ jobs:
       - name: 逐配方構建（容器隔離＝取代 chroot）
         if: steps.scan.outputs.changed != '0'
         run: |
-          cp /tmp/changed.txt /tmp/list
+          # 排除 OBSOLETE，總數才是真正要建的 91 包
+          : > /tmp/list
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            [ -f "packages/$name/OBSOLETE" ] && continue
+            printf '%s\n' "$name" >> /tmp/list
+          done < /tmp/changed.txt
+          total=$(wc -l < /tmp/list)
+          awk '{print NR"\t"$0}' /tmp/list > /tmp/list.indexed
           chmod +x ci/build-recipe.sh ci/scan-updates.py
-          # shellcheck disable=SC2046
-          xargs -a /tmp/list -n1 -P2 ci/build-recipe.sh
+          # xargs -n2 給每包 index/name；TOTAL 讓子殼顯示進度
+          TOTAL="$total" xargs -a /tmp/list.indexed -n2 -P2 bash -c '
+            i=$1; name=$2
+            echo "[$i/$TOTAL] START $name"
+            ci/build-recipe.sh "$name"; rc=$?
+            if [ $rc -eq 0 ]; then echo "[$i/$TOTAL] OK $name"; else echo "[$i/$TOTAL] FAIL $name"; fi
+            exit $rc
+          ' _
+          echo "DONE total=$total"
       - name: 合併成 feed 併發佈 release
         if: steps.scan.outputs.changed != '0'
         run: |
