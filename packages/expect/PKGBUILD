@@ -33,7 +33,9 @@ build() {
                 --with-tclinclude=/usr/include
     # expect 5.45.4 是舊源碼；GCC 16 的 warnings-as-errors 會把它的老式定義/未使用變數判死。
     # 只關掉「警告轉錯誤」，不是關警告。
-    make CFLAGS="${CFLAGS} -Wno-error" CXXFLAGS="${CXXFLAGS} -Wno-error"
+    make CFLAGS="${CFLAGS} -Wno-error -Wno-error=format-security" \
+         CXXFLAGS="${CXXFLAGS} -Wno-error" \
+         CFLAGS_WARNING="-Wno-error"
 }
 
 check() {
