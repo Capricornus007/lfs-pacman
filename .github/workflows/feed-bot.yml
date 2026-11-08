@@ -7,12 +7,8 @@ on:
     branches: [master]     # 推到 master 即觸發掃描/重建（公共倉庫免費分鐘數）
   workflow_dispatch:
     inputs:
-      force:
-        description: "忽略偵測，全量重建 91 配方"
-        type: boolean
-        default: false
       only:
-        description: "只建指定套件（逗號分隔，例：gcc,expect）；留空＝依掃描結果"
+        description: "只建指定套件（逗號分隔，例：gcc,expect）；留空＝全量重建 91 包並發佈 feed"
         type: string
         default: ""
 
@@ -36,8 +32,8 @@ jobs:
           ONLY: ${{ inputs.only }}
         run: |
           args=()
-          if [ "${FORCE:-}" = "true" ]; then args+=(--all); fi
-          if [ -n "${ONLY:-}" ]; then args+=(--only "$ONLY"); fi
+          # 預設全量重建 91 包；只有在 only 指定時才縮小範圍（驗證模式，不發佈）。
+          if [ -n "${ONLY:-}" ]; then args+=(--only "$ONLY"); else args+=(--all); fi
           json=$(python3 ci/prepare-matrix.py "${args[@]}")
           echo "packages=$json" >> "$GITHUB_OUTPUT"
           count=$(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])))' "$json")
@@ -91,8 +87,15 @@ jobs:
           # makepkg.conf 覆寫：64 位與 -m32 共用 znver3 -O3 + LTO。
           # makepkg 的 check_option() 對 "!lto" 優先；PKGBUILD 的 !lto 還會壓過 makepkg.conf 的 lto，
           # 所以兩邊都要換。Arch 容器若 makepkg.conf 完全沒列 lto 再補 OPTIONS+=(lto)。
+          # 全域預設開 LTO（makepkg.conf）；再把所有 PKGBUILD 的 !lto 翻成 lto。
+          # 但 base toolchain（gcc/glibc/binutils/grub/openssl）對 LTO 最敏感
+          # （見 ci/makepkg-flags.conf 註解），翻完後這 5 個退回 !lto，
+          # 避免 gprofng 的 LTO 連結炸、及其他 LTO 不相容。其餘 82 包照吃 LTO。
           sed -i 's/!lto/lto/g' /etc/makepkg.conf
           sed -i 's/!lto/lto/g' packages/*/PKGBUILD
+          for p in gcc glibc binutils grub openssl; do
+            sed -i "s/^options=(.*)/options=(!strip !debug !lto)/" "packages/$p/PKGBUILD"
+          done
           grep -qE '^OPTIONS=\(.*lto' /etc/makepkg.conf || echo 'OPTIONS+=(lto)' >> /etc/makepkg.conf
           cat ci/makepkg-flags.conf >> /etc/makepkg.conf
           # 編譯器外掛：連 Makefile 寫死 CFLAGS、硬寫 -march=i686 的配方也吃到。

@@ -41,6 +41,11 @@ prepare() {
 }
 
 build() {
+    # CI 容器 gcc 預設啟用 CET（定義 __CET__）；本配方 configure 未啟用 CET 時，
+    # glibc 的 SHADOW_STACK_POINTER_OFFSET 宏未定義，longjmp.c 的靜態斷言會報
+    # undeclared。關閉 CET（與下方 --disable-cet 一致）讓 __CET__ 不被定義。
+    export CFLAGS="${CFLAGS} -fcf-protection=none -mshstk=no"
+    export CXXFLAGS="${CXXFLAGS} -fcf-protection=none -mshstk=no"
     # 64 位（書 8.5.1 configure 原文）：
     #   書的 rm -fv /usr/share/config.site 是清 chroot 宿主殘留，makepkg 構建樹天然乾淨，等價省略；
     #   書的兩階段安裝（dest install→拷 so→make install）是為「替換正在使用的 glibc」設計，
@@ -52,6 +57,7 @@ build() {
     ../configure --prefix=/usr                   \
                  --disable-werror                \
                  --disable-nscd                  \
+                 --disable-cet                   \
                  libc_cv_slibdir=/usr/lib        \
                  --enable-stack-protector=strong \
                  --enable-kernel=5.10
@@ -69,6 +75,7 @@ build() {
           --libexecdir=/usr/lib32            \
           --disable-werror                   \
           --disable-nscd                     \
+          --disable-cet                      \
           libc_cv_slibdir=/usr/lib32         \
           --enable-stack-protector=strong    \
           --enable-kernel=5.10
