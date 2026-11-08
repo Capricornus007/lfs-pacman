@@ -14,6 +14,16 @@ source=(${pkgname}-${pkgver}.tar.gz)
 md5sums=('3dd690cc5ed65605cf4d125c1176439c')
 
 prepare() {
+    cd ${pkgname}-${pkgver}
+    # OpenSSL 4.1.0 上游條件不一致（znver3 才會踩到）：
+    #   crypto/evp/encode.c:178/246 以 __AVX2__ && HAVE_AVX2_INTRINSICS 決定呼叫
+    #   encode_base64_avx2()，但 enc_b64_avx2.h 的宣告被 __x86_64__ 條件包住。
+    # 32 位樹原本沒有 __AVX2__ 所以沒事；-march=znver3 定義 __AVX2__ 後，
+    # 32 位會隱式宣告 → error。把使用處補上與宣告相同的 64 位條件，
+    # 64 位行為完全不變，也不必把 32 位降回 generic。
+    sed -i 's/#if defined(__AVX2__) && defined(HAVE_AVX2_INTRINSICS)/#if defined(__AVX2__) \&\& defined(HAVE_AVX2_INTRINSICS) \&\& (defined(__x86_64) || defined(__x86_64__))/' crypto/evp/encode.c
+    grep -q 'defined(__x86_64) || defined(__x86_64__)' crypto/evp/encode.c || { echo "自檢失敗：encode.c 未補 64 位條件"; return 1; }
+    cd ..
     rm -rf build32; cp -a ${pkgname}-${pkgver} build32
 }
 
