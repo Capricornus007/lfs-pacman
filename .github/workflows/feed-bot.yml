@@ -78,7 +78,7 @@ jobs:
             base-devel git curl jq python python-pip \
             python-flit-core python-setuptools python-wheel python-build python-installer \
             meson ninja tcl rsync pacman-contrib libpipeline re2c \
-            lib32-glibc lib32-gcc-libs lib32-zlib lib32-zstd \
+            lib32-glibc lib32-gcc-libs lib32-zlib lib32-zstd lib32-xz \
             lib32-ncurses lib32-pcre2 lib32-readline lib32-util-linux \
             lib32-bzip2 lib32-openssl
           useradd -m builder
@@ -86,7 +86,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: 套用 znver3（64／32 位）＋ runner 探測
         run: |
-          # makepkg.conf 覆寫：64 位與 -m32 共用 znver3。
+          # makepkg.conf 覆寫：64 位與 -m32 共用 znver3 -O3 + LTO。
+          # makepkg 的 check_option() 對 "!lto" 優先，光 append lto 不會生效，
+          # 必須先把 !lto 換掉；Arch 容器若完全沒列 lto 再補 OPTIONS+=(lto)。
+          sed -i 's/!lto/lto/g' /etc/makepkg.conf
+          grep -qE '^OPTIONS=\(.*lto' /etc/makepkg.conf || echo 'OPTIONS+=(lto)' >> /etc/makepkg.conf
           cat ci/makepkg-flags.conf >> /etc/makepkg.conf
           # 編譯器外掛：連 Makefile 寫死 CFLAGS、硬寫 -march=i686 的配方也吃到。
           install -d /usr/local/bin
@@ -107,7 +111,8 @@ jobs:
           /usr/bin/gcc -march=znver3 -O2 /tmp/znver3-probe.c -o /tmp/znver3-probe
           /tmp/znver3-probe && echo "- znver3 probe: OK" >> "$GITHUB_STEP_SUMMARY"
           echo "有效旗標："
-          grep -E '^(CFLAGS|CXXFLAGS)=' /etc/makepkg.conf | tail -2
+          grep -E '^(CFLAGS|CXXFLAGS|LTOFLAGS)=' /etc/makepkg.conf | tail -3
+          grep -E '^OPTIONS=' /etc/makepkg.conf | tail -1
           gcc -march=znver3 -dM -E - </dev/null | grep -m1 '__znver3__'
       - name: 構建 ${{ matrix.pkg.name }}
         id: build
