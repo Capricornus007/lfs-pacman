@@ -7,6 +7,22 @@ arch=('x86_64')
 url="https://core.tcl-lang.org/expect/"
 license=('custom:EXPECT')
 options=(!strip !debug !lto)
+
+# Arch makepkg.conf 的 CFLAGS 含 -Werror=format-security，且 GCC 16 預設把
+# implicit-function-declaration / int-conversion 等警告升成錯誤；expect 5.45.4
+# 是舊碼，必須在 configure 之前把「警告轉錯誤」降回警告（不是關警告）。
+#
+# 關鍵：絕對不要用 `make CFLAGS=...` 覆蓋 CFLAGS！TEA 的 configure
+# （expect5.45.4/configure:10008）生成的是
+#   CFLAGS = <flags> ${CFLAGS_DEFAULT} ${CFLAGS_WARNING} ${SHLIB_CFLAGS}
+# 其中 ${SHLIB_CFLAGS} = -fPIC。在 make 命令列覆蓋 CFLAGS 會把 -fPIC 一起丟掉，
+# 連結 libexpect*.so 時就會噴
+#   relocation R_X86_64_PC32 ... can not be used when making a shared object;
+#   recompile with -fPIC
+# 所以旗標只從環境帶進 configure，make 本身不再覆寫 CFLAGS。
+export CFLAGS="${CFLAGS/-Werror=format-security/} -fPIC -Wno-error -Wno-error=format-security"
+export CXXFLAGS="${CXXFLAGS/-Werror=format-security/} -Wno-error"
+
 # 依賴附錄 RUN=Glibc and Tcl
 depends=('glibc' 'tcl')
 source=(expect${pkgver}.tar.gz
@@ -31,11 +47,10 @@ build() {
                 --disable-rpath         \
                 --mandir=/usr/share/man \
                 --with-tclinclude=/usr/include
-    # expect 5.45.4 是舊源碼；GCC 16 的 warnings-as-errors 會把它的老式定義/未使用變數判死。
-    # 只關掉「警告轉錯誤」，不是關警告。
-    make CFLAGS="${CFLAGS} -Wno-error -Wno-error=format-security" \
-         CXXFLAGS="${CXXFLAGS} -Wno-error" \
-         CFLAGS_WARNING="-Wno-error"
+    # 不覆蓋 CFLAGS：讓 configure 生成的 ${SHLIB_CFLAGS}(-fPIC) 留在編譯旗標裡。
+    # 只覆蓋 CFLAGS_WARNING（TEA 的警告旗標變數，已由上面的環境 CFLAGS 帶入
+    # -Wno-error），其餘照書 8.18.1 用 make 建出 .so。
+    make CFLAGS_WARNING="-Wno-error"
 }
 
 check() {
