@@ -39,6 +39,18 @@ prepare() {
 
 build() {
     cd ${pkgname}-${pkgver}/build
+    # ── LTO 姿勢（2026-11-09 修正）──
+    # GCC 是自舉編譯器，LTO 要走官方支援的 --with-build-config=bootstrap-lto，
+    # 不能靠 makepkg 把 -flto 灌進外層 CFLAGS。實測失敗現場：
+    #   stage1 編 libgcc_s.so 時，外層 -flto=auto 把多個 TU 合併成單一 LTRANS 單元，
+    #   而 libgcc 的 __gttf2 帶 .symver ...@@GCC_4.3.0 版本化宣告；合併後同時出現
+    #   "multiple definition of __gttf2" 與 "invalid attempt to declare external
+    #   version name as default in symbol `__gttf2@@GCC_4.3.0'"，libgcc_s.so 連結死。
+    # 本機已重現：分開編譯正常，合併成單一 LTRANS 就炸。
+    # 所以：外層剝掉所有 -flto*（含 LTOFLAGS），LTO 完全交給 bootstrap-lto。
+    export CFLAGS="$(echo "$CFLAGS" | sed -E 's/-flto(=auto|=1|=4)?//g')"
+    export CXXFLAGS="$(echo "$CXXFLAGS" | sed -E 's/-flto(=auto|=1|=4)?//g')"
+    export LTOFLAGS=""
     # 書 8.33 pre 4–5
     ../configure --prefix=/usr                \
                  LD=ld                        \

@@ -14,6 +14,22 @@ md5sums=('d772acfbd55a81644e9fe7b8189cd2a5')
 
 build() {
     cd ${pkgname}-${pkgver}
+    # gprofng 走自己的子 configure，其最終連結（gprofng-archive）用裸 ld 且不帶
+    # LTO plugin → "plugin needed to handle lto object" + "undefined reference to main"。
+    #
+    # 2026-11-09 修正：原本 sed 把 gprofng Makefile 的 -flto=auto 換成 -fno-lto，
+    # 但兩個原因讓它完全無效：
+    #   1) gprofng 的 Makefile 是 make 階段由子 configure 才生成，configure 後 sed 找不到；
+    #   2) 就算改到，makepkg 的 LTOFLAGS="-flto=auto" 會在命令列尾端再追加一次，
+    #      後者覆蓋前者（本機實測 -fno-lto ... -flto=auto → 產物仍是 LTO 物件）。
+    #
+    # 真正的修法：整包編 fat LTO objects（-ffat-lto-objects）。fat 物件同時含 LTO
+    # 位元碼與真實機器碼，裸 ld 讀得到機器碼就能連結，而 gcc 驅動的連結仍走 LTO
+    # 優化。本機實測：slim LTO 物件 + 裸 ld → plugin needed + undefined main；
+    # fat LTO 物件 + 裸 ld → 連結成功且執行正常。LTO 效果不變，只有物件檔大一點。
+    # 放在 build() 開頭 export，configure 與 make（含 gprofng 子 configure）全覆蓋。
+    export CFLAGS="${CFLAGS} -ffat-lto-objects"
+    export CXXFLAGS="${CXXFLAGS} -ffat-lto-objects"
     # 書 8.22.1：out-of-tree 構建
     rm -rf build; mkdir -pv build
     cd build
@@ -28,12 +44,6 @@ build() {
                  --with-system-zlib  \
                  --with-lib-path=/usr/lib \
                  --enable-default-hash-style=gnu
-    # gprofng 走自己的子 configure，其最終連結未帶 LTO plugin →
-    # "plugin needed to handle lto object" + "undefined reference to main"。
-    # 子 configure 後 gprofng/Makefile 已生成，把 -flto 翻成 -fno-lto 只關 gprofng，
-    # ld/as 其餘照吃全域 LTO。
-    find . -path '*/gprofng/*' -name Makefile -exec \
-      sed -i 's/-flto=auto/-fno-lto/g; s/-flto /-fno-lto /g; s/-flto$/-fno-lto/g' {} +
     make tooldir=/usr
 }
 

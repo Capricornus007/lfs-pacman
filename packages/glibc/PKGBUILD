@@ -44,8 +44,14 @@ build() {
     # CI 容器 gcc 預設啟用 CET（定義 __CET__）；本配方 configure 未啟用 CET 時，
     # glibc 的 SHADOW_STACK_POINTER_OFFSET 宏未定義，longjmp.c 的靜態斷言會報
     # undeclared。關閉 CET（與下方 --disable-cet 一致）讓 __CET__ 不被定義。
-    export CFLAGS="${CFLAGS} -fcf-protection=none -mshstk=no"
-    export CXXFLAGS="${CXXFLAGS} -fcf-protection=none -mshstk=no"
+    #
+    # 2026-11-09 修正：原本寫 -mshstk=no，但 GCC 16.2.1 沒有這個選項
+    # （實測 `gcc -mshstk=no` → "unrecognized command-line option"），害 glibc
+    # 在 configure 第一個測試 `checking for suffix of object files` 就 cannot
+    # compile。實測只有 -fcf-protection 會定義 __CET__（-mshstk 不會），
+    # 所以單靠 -fcf-protection=none 就足以關掉 CET，-mshstk 不帶也無妨。
+    export CFLAGS="${CFLAGS} -fcf-protection=none"
+    export CXXFLAGS="${CXXFLAGS} -fcf-protection=none"
     # 64 位（書 8.5.1 configure 原文）：
     #   書的 rm -fv /usr/share/config.site 是清 chroot 宿主殘留，makepkg 構建樹天然乾淨，等價省略；
     #   書的兩階段安裝（dest install→拷 so→make install）是為「替換正在使用的 glibc」設計，
