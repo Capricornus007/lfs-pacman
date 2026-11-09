@@ -31,9 +31,26 @@ for s in srcs:
     if os.path.exists(s): continue
     u=urls.get(s)
     if not u: print("無URL:",s); sys.exit(1)
-    print("wget:",u)
-    subprocess.run(["curl","-fsSLO","--retry","8","--retry-delay","3","--connect-timeout","25",u],check=True)
-    if os.path.basename(u)!=s: os.rename(os.path.basename(u),s)
+    cands=[u]
+    # GNU 的 ftpmirror.gnu.org 從 GitHub runner 常連不上（2026-11-09 實錘：
+    # gzip、mpc 都 curl 28 逾時，連 8 次重試全失敗）。補官方與 kernel.org 鏡像。
+    if "ftpmirror.gnu.org/" in u:
+        rest=u.split("ftpmirror.gnu.org/",1)[1]
+        cands += ["https://ftp.gnu.org/gnu/"+rest,
+                  "https://mirrors.kernel.org/gnu/"+rest]
+    ok=False; last=""
+    for uu in cands:
+        print("wget:",uu)
+        base=os.path.basename(uu)
+        subprocess.run(["rm","-f",base])
+        r=subprocess.run(["curl","-fsSLO","--retry","4","--retry-delay","3",
+                          "--connect-timeout","20",uu])
+        if r.returncode==0:
+            if base!=s: os.rename(base,s)
+            ok=True; break
+        last=uu
+    if not ok:
+        print("下載失敗（含鏡像）:",last); sys.exit(1)
 PY
 chown -R builder . 2>/dev/null || true
 # /usr/local/bin 放 znver3 編譯器外掛；su 會重建 PATH，這裡明確帶過去，
