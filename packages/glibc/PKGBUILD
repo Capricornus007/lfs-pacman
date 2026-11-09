@@ -31,6 +31,34 @@ prepare() {
     tar -xf "${srcdir}/tzdata2026e.tar.gz" -C tzdata-src
     # 兩棵構建樹：64 位用原樹（§8.5.1）；32 位用副本（§8.5.2）
     rm -rf build32; cp -a ${pkgname}-${pkgver} build32
+    # ── LTO 相容性補丁（2026-11-09，用戶指示「不支持就讓它支持，打補丁也得支持」）──
+    # glibc 的 scripts/gen-as-const.py → glibcextract.compute_c_consts() 用
+    # `gcc -S` 把 asm("/* @@@name@@@X@@@value@@@%0@@@end@@@ */") 編成組語，
+    # 再從組語註解裡 regex 抽常數值（全樹 61 個 .sym 檔都走這條路徑）。
+    # 帶 -flto 時 `gcc -S` 輸出的是 LTO 位元碼（.gnu.lto_* 段 + .base64），
+    # 不是組語，註解全消失 → 標頭檔是空的 → SHADOW_STACK_POINTER_OFFSET 等
+    # 常數未定義 → longjmp.c 靜態斷言炸。
+    # 本機實測：無 -flto 時 .s 有 1 個 @@@name@@@；有 -flto=auto 時 0 個。
+    #
+    # 修法：只在這一個「抽常數」的子呼叫裡剝掉 -flto，其餘編譯／連結
+    # 照吃全域 LTO。glibc 本體真的吃到 LTO，不是把它排除在外。
+    for tree in ${pkgname}-${pkgver} build32; do
+        python3 - "$tree/scripts/glibcextract.py" <<'PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+old = "        cmd = ('%s -S -o %s -x c - < %s' % (cc, s_file_name, c_file_name))"
+new = ("        # MLFS: -flto makes gcc -S emit LTO bytecode instead of assembly, so the\n"
+       "        # @@@name@@@ comments vanish and constants cannot be extracted. Strip\n"
+       "        # -flto only for this constant-extraction sub-call; the rest of the\n"
+       "        # build keeps LTO.\n"
+       "        cc_no_lto = re.sub(r'-flto(?:=auto|=1|=4)?', '', cc)\n"
+       "        cmd = ('%s -S -o %s -x c - < %s' % (cc_no_lto, s_file_name, c_file_name))")
+assert s.count(old) == 1, 'gen-as-const cmd line not found exactly once in ' + sys.argv[1]
+p.write_text(s.replace(old, new))
+print('patched', sys.argv[1])
+PY
+    done
     cd ${pkgname}-${pkgver}
     # 書 8.5.1 兩個補丁，順序照書
     patch -Np1 -i "../${pkgname}-fhs-1.patch"
@@ -53,20 +81,19 @@ build() {
     export CFLAGS="${CFLAGS} -fcf-protection=none"
     export CXXFLAGS="${CXXFLAGS} -fcf-protection=none"
     #
-    # 2026-11-09 第二個根因（run 42562203613 實證）：glibc 建置期間必須完全剝掉 -flto。
-    # 症狀：longjmp.c 報 `SHADOW_STACK_POINTER_OFFSET undeclared`，但這不是 CET 問題——
-    # 真正的斷點是 glibc 的 gen-as-const.py 抽不到常數。機制（本機實測）：
-    #   gen-as-const 把 `asm("/* @@@name@@@X@@@value@@@%0@@@end@@@ */" : : "i"(...))`
-    #   編成 C，然後跑 `gcc -S` 再從組語註解裡 regex 抽值。
-    #   帶 -flto=auto 時 `gcc -S` 輸出的是 LTO 位元碼（.gnu.lto_* 段 + .base64），
-    #   不是組語，`@@@name@@@` 註解全部消失 → jmp_buf-ssp.h 是空的
-    #   → SHADOW_STACK_POINTER_OFFSET 未定義 → longjmp.c 靜態斷言炸。
-    # 實測數據：無 -flto 時 .s 有 1 個 @@@name@@@；有 -flto=auto 時 0 個。
-    # 且 glibc upstream 本就不支援 LTO（libc 大量手調組語、建置期要執行產物）。
-    # 所以 glibc 這包不參與全域 LTO，LTO 由其他 90 包承擔。
-    export CFLAGS="$(echo "$CFLAGS" | sed -E 's/-flto(=auto|=1|=4)?//g')"
-    export CXXFLAGS="$(echo "$CXXFLAGS" | sed -E 's/-flto(=auto|=1|=4)?//g')"
-    export LTOFLAGS=""
+    # 2026-11-09 第二個根因（run 42562203613 實證）：glibc 建置期間的 -flto 會讓
+    # gen-as-const 抽不到常數。症狀：longjmp.c 報 `SHADOW_STACK_POINTER_OFFSET
+    # undeclared`，但這不是 CET 問題——斷點在 glibc 的 gen-as-const.py。
+    # 機制（本機實測）：它把 `asm("/* @@@name@@@X@@@value@@@%0@@@end@@@ */" : : "i"(...))`
+    # 編成 C，跑 `gcc -S` 再從組語註解裡 regex 抽值。帶 -flto=auto 時 `gcc -S`
+    # 輸出的是 LTO 位元碼（.gnu.lto_* 段 + .base64），不是組語，`@@@name@@@`
+    # 註解全部消失 → jmp_buf-ssp.h 是空的 → 常數未定義 → 靜態斷言炸。
+    # 實測：無 -flto 時 .s 有 1 個 @@@name@@@；有 -flto=auto 時 0 個。
+    #
+    # 修法（用戶指示：不支持就讓它支持，打補丁也得支持）：
+    # 已在 prepare() 打補丁到 scripts/glibcextract.py，只在那一個抽常數的
+    # 子呼叫裡剝掉 -flto，其餘編譯／連結照吃全域 LTO。
+    # 所以這裡不再剝 -flto，glibc 本體真的吃到 LTO。
     # 64 位（書 8.5.1 configure 原文）：
     #   書的 rm -fv /usr/share/config.site 是清 chroot 宿主殘留，makepkg 構建樹天然乾淨，等價省略；
     #   書的兩階段安裝（dest install→拷 so→make install）是為「替換正在使用的 glibc」設計，
