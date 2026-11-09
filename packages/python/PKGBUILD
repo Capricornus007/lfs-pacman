@@ -7,7 +7,7 @@ pkgdesc="高階通用程式語言（CPython 3.15）"
 arch=('x86_64')
 url="https://www.python.org/"
 license=('PSF-2.0')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄 RUN=Bzip2, Expat, Gdbm, Glibc, Libffi, Libxcrypt,
 #             Mpdecimal, Ncurses, OpenSSL, and Zlib
 depends=('bzip2' 'expat' 'gdbm' 'glibc' 'libffi' 'libxcrypt'

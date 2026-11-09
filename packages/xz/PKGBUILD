@@ -6,7 +6,7 @@ pkgdesc="XZ/LZMA 壓縮庫與工具（MLFS multilib：lib + lib32）"
 arch=('x86_64')
 url="https://tukaani.org/xz/"
 license=('0BSD' 'GPL-2.0-or-later' 'GPL-3.0-or-later' 'LGPL-2.1-or-later')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄：Glibc
 depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.xz)

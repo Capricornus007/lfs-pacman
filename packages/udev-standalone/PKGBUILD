@@ -8,7 +8,7 @@ pkgdesc="clean-room udev 裝置管理員與 libudev（TBWTFPL）"
 arch=('x86_64')
 url="https://github.com/Capricornus007"
 license=('custom:TBWTFPL' 'GPL-2.0-or-later')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 provides=('udev' 'libudev' 'libudev.so=1-64' 'libudev.so=1-32')
 conflicts=('udev')
 replaces=('udev')

@@ -6,7 +6,7 @@ pkgdesc="GNU C 庫（MLFS multilib：lib + lib32；第 8 章首包）"
 arch=('x86_64')
 url="https://www.gnu.org/software/libc/"
 license=('GPL' 'LGPL' 'BSD' 'MIT')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 規則 §7.4-1：depends 只寫帳本中存在的包名——glibc 是第 8 章首包，前面只有 bootstrap BLFS，
 # 而它不依賴那些，故為空。書 8.5 的構建依賴（Bash/Binutils/Coreutils/Gawk/GCC/Grep/Make/
 # Perl/Sed/Texinfo）是 chroot 手編底座，在 MLFS 帳本中不存在對應包，不寫。
@@ -80,7 +80,10 @@ new = (
     "\tcp $(common-objpfx)libc_pic.a $@.libc.a\n"
     "\tobjcopy --remove-section='.gnu.lto_*' $@.dl.os\n"
     "\tobjcopy --remove-section='.gnu.lto_*' $@.libc.a\n"
-    "\t$(CC) $(filter-out -flto%,$(LDFLAGS)) $(filter-out -flto%,$(TARGET-LDFLAGS)) -nostdlib -nostartfiles -r -o $@.o $@T.o '-Wl,-(' $@.dl.os $@.libc.a $(gnulib) '-Wl,-)' -Wl,-Map,$@T\n"
+    "\t# dl-allobjs.os itself defines __GI___libc_fatal etc.; the archive member\n"
+    "\t# pulled in for other symbols then re-defines them. This link only builds\n"
+    "\t# the map, so let the first definition win for this step.\n"
+    "\t$(CC) $(filter-out -flto%,$(LDFLAGS)) $(filter-out -flto%,$(TARGET-LDFLAGS)) -nostdlib -nostartfiles -r -Wl,--allow-multiple-definition -o $@.o $@T.o '-Wl,-(' $@.dl.os $@.libc.a $(gnulib) '-Wl,-)' -Wl,-Map,$@T\n"
     "\trm -f $@.dl.os $@.libc.a\n"
 )
 assert s.count(old) == 1, 'librtld.map reloc-link line not found exactly once in ' + sys.argv[1]

@@ -6,7 +6,7 @@ pkgdesc="Zstandard 快速壓縮庫與工具（MLFS multilib）"
 arch=('x86_64')
 url="https://facebook.github.io/zstd/"
 license=('BSD-3-Clause' 'GPL-2.0-or-later')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄：Glibc
 depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.gz)

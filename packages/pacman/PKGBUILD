@@ -11,7 +11,7 @@ pkgdesc="libalpm 為基礎的套件管理器（含 makepkg）"
 arch=('x86_64')
 url="https://gitlab.archlinux.org/pacman/pacman"
 license=('GPL-2.0-or-later')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 depends=('bash' 'bzip2' 'coreutils' 'curl' 'fakeroot' 'file' 'findutils'
          'gettext' 'glibc' 'grep' 'gzip' 'libarchive' 'ncurses' 'openssl'
          'sed' 'tar' 'xz' 'zlib')

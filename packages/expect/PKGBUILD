@@ -6,7 +6,7 @@ pkgdesc="自動化交互程序工具（Tcl 擴展）"
 arch=('x86_64')
 url="https://core.tcl-lang.org/expect/"
 license=('custom:EXPECT')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 
 # Arch makepkg.conf 的 CFLAGS 含 -Werror=format-security，且 GCC 16 預設把
 # implicit-function-declaration / int-conversion 等警告升成錯誤；expect 5.45.4

@@ -6,7 +6,7 @@ pkgdesc="高質量 bzip2 壓縮工具與 libbz2（MLFS multilib）"
 arch=('x86_64')
 url="https://www.sourceware.org/bzip2/"
 license=('BSD-4-Clause')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄：Glibc
 depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.gz

@@ -6,7 +6,7 @@ pkgdesc="Linux man pages（約 2400 頁；crypt 手冊由 Libxcrypt 提供）"
 arch=('x86_64')
 url="https://www.kernel.org/doc/man-pages/"
 license=('GPL-2.0-or-later' 'BSD-3-Clause')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 書 8.3 無構建依賴；帳本中無前置包
 depends=()
 source=(${pkgname}-${pkgver}.tar.xz)

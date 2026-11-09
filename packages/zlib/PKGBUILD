@@ -6,7 +6,7 @@ pkgdesc="deflate 壓縮庫（MLFS multilib：lib + lib32）"
 arch=('x86_64')
 url="https://www.zlib.net/"
 license=('ZLIB')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄：Glibc
 depends=('glibc')
 source=(${pkgname}-${pkgver}.tar.gz)

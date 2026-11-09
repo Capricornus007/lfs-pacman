@@ -6,7 +6,7 @@ pkgdesc="注重速度的小型構建系統"
 arch=('x86_64')
 url="https://ninja-build.org/"
 license=('Apache-2.0')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄 RUN=GCC and Glibc；gcc 批次 3 晚於本包——cutover 首次入帳
 # 按手冊 §7.4 規則 9 用 --assume-installed gcc 過渡
 depends=('gcc' 'glibc')

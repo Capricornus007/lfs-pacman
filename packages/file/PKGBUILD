@@ -6,7 +6,7 @@ pkgdesc="檔案類型識別（magic；MLFS multilib）"
 arch=('x86_64')
 url="https://www.darwinsys.com/file/"
 license=('BSD-2-Clause')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄 Required at runtime：Glibc, Bzip2, Xz, and Zlib
 depends=('glibc' 'bzip2' 'xz' 'zlib')
 source=(${pkgname}-${pkgver}.tar.gz)

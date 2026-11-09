@@ -6,7 +6,7 @@ pkgdesc="GNU 通用函式庫支援腳本（libltdl）"
 arch=('x86_64')
 url="https://www.gnu.org/software/libtool/"
 license=('GPL-2.0-or-later')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄 RUN=Autoconf, Automake, Bash, Binutils, Coreutils, File, GCC,
 #             Glibc, Grep, Make, and Sed（帳本名小寫；多數為後批，規則 9/11）
 depends=('autoconf' 'automake' 'bash' 'binutils' 'coreutils' 'file' 'gcc'

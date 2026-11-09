@@ -6,7 +6,7 @@ pkgdesc="Perl 兼容正則庫 2（MLFS multilib）"
 arch=('x86_64')
 url="https://www.pcre.org/"
 license=('BSD-3-Clause')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄 RUN=Glibc；BUILD 另用 Zlib/Bzip2（pcre2grep）與 Readline（pcre2test），
 # 三者在帳本中均已入帳（批次 1 與本批 8.12），按真實依賴寫
 depends=('glibc' 'zlib' 'bzip2' 'readline')

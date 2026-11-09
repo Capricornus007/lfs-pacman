@@ -6,7 +6,7 @@ pkgdesc="GNU readline 行編輯庫（MLFS multilib）"
 arch=('x86_64')
 url="https://tiswww.case.edu/php/chet/readline/rltop.html"
 license=('GPL-3.0-or-later')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 依賴附錄 RUN=Glibc and Ncurses；ncurses（書 8.34）在帳本中晚於本包——
 # cutover 首次入帳按手冊 §7.4 規則 9 用 --assume-installed ncurses 過渡
 depends=('glibc' 'ncurses')
