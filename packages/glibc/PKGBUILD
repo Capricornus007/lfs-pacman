@@ -87,6 +87,26 @@ new = (
     "\trm -f $@.dl.os $@.libc.a\n"
 )
 assert s.count(old) == 1, 'librtld.map reloc-link line not found exactly once in ' + sys.argv[1]
+s = s.replace(old, new)
+old2 = "reloc-link = $(LINK.o) -nostdlib -nostartfiles -r"
+new2 = ("# MLFS: rtld symbol discovery cannot run under LTO (LTO inlines __libc_message\n"
+        "# etc., the map then lists archive members that rtld never needs, and\n"
+        "# librtld.mk asks for rtld-*.os targets that have no rule).  Build\n"
+        "# dl-allobjs.os and the map link from fat-object machine code instead.\n"
+        "reloc-link = $(CC) $(filter-out -flto%,$(LDFLAGS)) $(filter-out -flto%,$(TARGET-LDFLAGS)) -nostdlib -nostartfiles -r")
+assert s.count(old2) == 1, 'reloc-link definition not found exactly once in ' + sys.argv[1]
+p.write_text(s.replace(old2, new2))
+print('patched', sys.argv[1])
+PY
+        python3 - "$tree/elf/rtld-Rules" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+old = "rtld-CFLAGS += $(no-stack-protector) $(no-fortify-source)"
+new = ("# MLFS: rtld modules stay non-LTO (see elf/Makefile patch); -fno-lto comes\n"
+       "# after CFLAGS on the command line, so it wins over -flto=auto.\n"
+       "rtld-CFLAGS += $(no-stack-protector) $(no-fortify-source) -fno-lto")
+assert s.count(old) == 1, 'rtld-CFLAGS line not found exactly once in ' + sys.argv[1]
 p.write_text(s.replace(old, new))
 print('patched', sys.argv[1])
 PY
