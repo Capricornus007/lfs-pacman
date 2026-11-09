@@ -136,7 +136,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p packages/gcc
-          gh release download current-mlfs-repo \
+          # --repo 明確指定：container 內 gh 用 git 偵測倉庫會撞
+          # "detected dubious ownership"（checkout 屬主與執行 uid 不同）。
+          gh release download --repo "$GITHUB_REPOSITORY" current-mlfs-repo \
             --pattern 'gcc-16.2.0-*.pkg.tar.zst' --dir packages/gcc --clobber
           ls -la packages/gcc/*.pkg.tar.zst
       - name: 構建 ${{ matrix.pkg.name }}
