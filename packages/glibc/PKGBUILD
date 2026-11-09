@@ -52,6 +52,21 @@ build() {
     # 所以單靠 -fcf-protection=none 就足以關掉 CET，-mshstk 不帶也無妨。
     export CFLAGS="${CFLAGS} -fcf-protection=none"
     export CXXFLAGS="${CXXFLAGS} -fcf-protection=none"
+    #
+    # 2026-11-09 第二個根因（run 42562203613 實證）：glibc 建置期間必須完全剝掉 -flto。
+    # 症狀：longjmp.c 報 `SHADOW_STACK_POINTER_OFFSET undeclared`，但這不是 CET 問題——
+    # 真正的斷點是 glibc 的 gen-as-const.py 抽不到常數。機制（本機實測）：
+    #   gen-as-const 把 `asm("/* @@@name@@@X@@@value@@@%0@@@end@@@ */" : : "i"(...))`
+    #   編成 C，然後跑 `gcc -S` 再從組語註解裡 regex 抽值。
+    #   帶 -flto=auto 時 `gcc -S` 輸出的是 LTO 位元碼（.gnu.lto_* 段 + .base64），
+    #   不是組語，`@@@name@@@` 註解全部消失 → jmp_buf-ssp.h 是空的
+    #   → SHADOW_STACK_POINTER_OFFSET 未定義 → longjmp.c 靜態斷言炸。
+    # 實測數據：無 -flto 時 .s 有 1 個 @@@name@@@；有 -flto=auto 時 0 個。
+    # 且 glibc upstream 本就不支援 LTO（libc 大量手調組語、建置期要執行產物）。
+    # 所以 glibc 這包不參與全域 LTO，LTO 由其他 90 包承擔。
+    export CFLAGS="$(echo "$CFLAGS" | sed -E 's/-flto(=auto|=1|=4)?//g')"
+    export CXXFLAGS="$(echo "$CXXFLAGS" | sed -E 's/-flto(=auto|=1|=4)?//g')"
+    export LTOFLAGS=""
     # 64 位（書 8.5.1 configure 原文）：
     #   書的 rm -fv /usr/share/config.site 是清 chroot 宿主殘留，makepkg 構建樹天然乾淨，等價省略；
     #   書的兩階段安裝（dest install→拷 so→make install）是為「替換正在使用的 glibc」設計，
