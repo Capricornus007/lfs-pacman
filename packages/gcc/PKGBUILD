@@ -33,48 +33,6 @@ prepare() {
         -i.orig gcc/config/i386/t-linux64
     sed '/STACK_REALIGN_DEFAULT/s/0/(!TARGET_64BIT \&\& TARGET_SSE)/' \
           -i gcc/config/i386/i386.h
-    # ── MLFS LTO 補丁（2026-11-09，用戶裁定「不支持就讓它支持」）──
-    # glibc 的 libc_hidden 別名（__GI_*）在「LTO 物件 + 手寫組譯」混用、
-    # 且用 --whole-archive 全連結時，linker 的 resolution 表不會給這些別名
-    # 條目；lto1 在 gcc/lto/lto-common.cc 直接 fatal_error：
-    #   lto1: fatal error: missing resolution data for *__GI___strncat
-    # 這是 glibc 無法用 LTO 建置的最後一道硬牆（前面 gen-as-const、rtld 鏈
-    # 已用 glibc 端補丁繞過）。這裡把中止改成 GCC 自己對版本化符號用的
-    # 保守預設（LDPR_PREVAILING_DEF_IRONLY_EXP）並印警告，讓 libc 能完成
-    # LTO 連結。只動這一行，其餘 LTO 行為不變。
-    python3 - gcc/lto/lto-common.cc <<'PY'
-import sys, pathlib
-p = pathlib.Path(sys.argv[1])
-s = p.read_text()
-old = '''	if (!res || *res == LDPR_UNKNOWN)
-	  {
-	    if (snode->output_to_lto_symbol_table_p ())
-	      fatal_error (input_location, "missing resolution data for %s",
-			   IDENTIFIER_POINTER
-			     (DECL_ASSEMBLER_NAME (snode->decl)));
-	  }'''
-new = '''	if (!res || *res == LDPR_UNKNOWN)
-	  {
-	    if (snode->output_to_lto_symbol_table_p ())
-	      {
-		/* MLFS: glibc's libc_hidden aliases (*__GI_*) can end up
-		   without a resolution entry when LTO objects are linked
-		   with hand-written assembly under --whole-archive.
-		   Aborting here makes glibc impossible to build with LTO;
-		   fall back to the same conservative resolution GCC
-		   already uses for versioned symbols below.  */
-		warning_at (input_location, 0,
-			    "missing resolution data for %s; assuming "
-			    "LDPR_PREVAILING_DEF_IRONLY_EXP",
-			    IDENTIFIER_POINTER
-			      (DECL_ASSEMBLER_NAME (snode->decl)));
-		snode->resolution = LDPR_PREVAILING_DEF_IRONLY_EXP;
-	      }
-	  }'''
-assert s.count(old) == 1, 'lto-common.cc fatal_error not found exactly once'
-p.write_text(s.replace(old, new))
-print('patched gcc/lto/lto-common.cc')
-PY
     # 跳過 bootstrap 的 stage2/stage3 嚴格比對：LTO 的並行 partition 讓兩次
     # 自舉的機器碼不保證逐位元相同（本機實測 tree-vect-stmts.o differs，
     # 2026-11-09）。GCC 官方 bootstrap-lto-lean 也是 do-compare = /bin/true；

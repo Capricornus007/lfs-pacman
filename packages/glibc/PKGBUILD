@@ -6,7 +6,7 @@ pkgdesc="GNU C 庫（MLFS multilib：lib + lib32；第 8 章首包）"
 arch=('x86_64')
 url="https://www.gnu.org/software/libc/"
 license=('GPL' 'LGPL' 'BSD' 'MIT')
-options=(!strip !debug lto)
+options=(!strip !debug !lto)
 # 規則 §7.4-1：depends 只寫帳本中存在的包名——glibc 是第 8 章首包，前面只有 bootstrap BLFS，
 # 而它不依賴那些，故為空。書 8.5 的構建依賴（Bash/Binutils/Coreutils/Gawk/GCC/Grep/Make/
 # Perl/Sed/Texinfo）是 chroot 手編底座，在 MLFS 帳本中不存在對應包，不寫。
@@ -31,86 +31,6 @@ prepare() {
     tar -xf "${srcdir}/tzdata2026e.tar.gz" -C tzdata-src
     # 兩棵構建樹：64 位用原樹（§8.5.1）；32 位用副本（§8.5.2）
     rm -rf build32; cp -a ${pkgname}-${pkgver} build32
-    # ── LTO 相容性補丁（2026-11-09，用戶指示「不支持就讓它支持，打補丁也得支持」）──
-    # glibc 的 scripts/gen-as-const.py → glibcextract.compute_c_consts() 用
-    # `gcc -S` 把 asm("/* @@@name@@@X@@@value@@@%0@@@end@@@ */") 編成組語，
-    # 再從組語註解裡 regex 抽常數值（全樹 61 個 .sym 檔都走這條路徑）。
-    # 帶 -flto 時 `gcc -S` 輸出的是 LTO 位元碼（.gnu.lto_* 段 + .base64），
-    # 不是組語，註解全消失 → 標頭檔是空的 → SHADOW_STACK_POINTER_OFFSET 等
-    # 常數未定義 → longjmp.c 靜態斷言炸。
-    # 本機實測：無 -flto 時 .s 有 1 個 @@@name@@@；有 -flto=auto 時 0 個。
-    #
-    # 修法：只在這一個「抽常數」的子呼叫裡剝掉 -flto，其餘編譯／連結
-    # 照吃全域 LTO。glibc 本體真的吃到 LTO，不是把它排除在外。
-    #
-    # 第二個補丁（第三種死法，run 42564369964 實證）：elf/Makefile 的
-    # librtld.map 是「符號發現」用的 -r 探測連結——把 LTO 的 .os 與手工組譯的
-    # stub 物件混連，只為了得到一張 map 來決定 ld.so 要哪些 libc 成員。
-    # makepkg 的 LTOFLAGS 會進 LDFLAGS → 這一步帶 -flto=auto → lto1 報
-    # `missing resolution data for *__GI___pthread_rwlock_wrlock`，且 plugin
-    # 提前載入 archive 成員造成大量 multiple definition。這一步不生產任何
-    # 執行碼，LTO 純屬副作用；下方補丁只在這裡改走 fat 物件的機器碼。
-    for tree in ${pkgname}-${pkgver} build32; do
-        python3 - "$tree/scripts/glibcextract.py" <<'PY'
-import re, sys, pathlib
-p = pathlib.Path(sys.argv[1])
-s = p.read_text()
-old = "        cmd = ('%s -S -o %s -x c - < %s' % (cc, s_file_name, c_file_name))"
-new = ("        # MLFS: -flto makes gcc -S emit LTO bytecode instead of assembly, so the\n"
-       "        # @@@name@@@ comments vanish and constants cannot be extracted. Strip\n"
-       "        # -flto only for this constant-extraction sub-call; the rest of the\n"
-       "        # build keeps LTO.\n"
-       "        cc_no_lto = re.sub(r'-flto(?:=auto|=1|=4)?', '', cc)\n"
-       "        cmd = ('%s -S -o %s -x c - < %s' % (cc_no_lto, s_file_name, c_file_name))")
-assert s.count(old) == 1, 'gen-as-const cmd line not found exactly once in ' + sys.argv[1]
-p.write_text(s.replace(old, new))
-print('patched', sys.argv[1])
-PY
-        python3 - "$tree/elf/Makefile" <<'PY'
-import sys, pathlib
-p = pathlib.Path(sys.argv[1])
-s = p.read_text()
-old = "\t$(reloc-link) -o $@.o $@T.o '-Wl,-(' $^ $(gnulib) '-Wl,-)' -Wl,-Map,$@T\n"
-new = (
-    "\t# MLFS: this link only discovers which libc objects rtld needs; running it\n"
-    "\t# under LTO makes lto1 die with \"missing resolution data for *__GI_*\".\n"
-    "\t# Use the machine code from fat LTO objects, stripping the LTO sections\n"
-    "\t# for this one step only; every real link still goes through LTO.\n"
-    "\tcp $(objpfx)dl-allobjs.os $@.dl.os\n"
-    "\tcp $(common-objpfx)libc_pic.a $@.libc.a\n"
-    "\tobjcopy --remove-section='.gnu.lto_*' $@.dl.os\n"
-    "\tobjcopy --remove-section='.gnu.lto_*' $@.libc.a\n"
-    "\t# dl-allobjs.os itself defines __GI___libc_fatal etc.; the archive member\n"
-    "\t# pulled in for other symbols then re-defines them. This link only builds\n"
-    "\t# the map, so let the first definition win for this step.\n"
-    "\t$(CC) $(filter-out -flto%,$(LDFLAGS)) $(filter-out -flto%,$(TARGET-LDFLAGS)) -nostdlib -nostartfiles -r -Wl,--allow-multiple-definition -o $@.o $@T.o '-Wl,-(' $@.dl.os $@.libc.a $(gnulib) '-Wl,-)' -Wl,-Map,$@T\n"
-    "\trm -f $@.dl.os $@.libc.a\n"
-)
-assert s.count(old) == 1, 'librtld.map reloc-link line not found exactly once in ' + sys.argv[1]
-s = s.replace(old, new)
-old2 = "reloc-link = $(LINK.o) -nostdlib -nostartfiles -r"
-new2 = ("# MLFS: rtld symbol discovery cannot run under LTO (LTO inlines __libc_message\n"
-        "# etc., the map then lists archive members that rtld never needs, and\n"
-        "# librtld.mk asks for rtld-*.os targets that have no rule).  Build\n"
-        "# dl-allobjs.os and the map link from fat-object machine code instead.\n"
-        "reloc-link = $(CC) $(filter-out -flto%,$(LDFLAGS)) $(filter-out -flto%,$(TARGET-LDFLAGS)) -nostdlib -nostartfiles -r")
-assert s.count(old2) == 1, 'reloc-link definition not found exactly once in ' + sys.argv[1]
-p.write_text(s.replace(old2, new2))
-print('patched', sys.argv[1])
-PY
-        python3 - "$tree/elf/rtld-Rules" <<'PY'
-import sys, pathlib
-p = pathlib.Path(sys.argv[1])
-s = p.read_text()
-old = "rtld-CFLAGS += $(no-stack-protector) $(no-fortify-source)"
-new = ("# MLFS: rtld modules stay non-LTO (see elf/Makefile patch); -fno-lto comes\n"
-       "# after CFLAGS on the command line, so it wins over -flto=auto.\n"
-       "rtld-CFLAGS += $(no-stack-protector) $(no-fortify-source) -fno-lto")
-assert s.count(old) == 1, 'rtld-CFLAGS line not found exactly once in ' + sys.argv[1]
-p.write_text(s.replace(old, new))
-print('patched', sys.argv[1])
-PY
-    done
     cd ${pkgname}-${pkgver}
     # 書 8.5.1 兩個補丁，順序照書
     patch -Np1 -i "../${pkgname}-fhs-1.patch"
@@ -125,35 +45,24 @@ build() {
     # glibc 的 SHADOW_STACK_POINTER_OFFSET 宏未定義，longjmp.c 的靜態斷言會報
     # undeclared。關閉 CET（與下方 --disable-cet 一致）讓 __CET__ 不被定義。
     #
-    # 2026-11-09 修正：原本寫 -mshstk=no，但 GCC 16.2.1 沒有這個選項
+    # 2026-11-09 修正：原本寫 `-mshstk=no`，但 GCC 16.2.1 沒有這個選項
     # （實測 `gcc -mshstk=no` → "unrecognized command-line option"），害 glibc
     # 在 configure 第一個測試 `checking for suffix of object files` 就 cannot
     # compile。實測只有 -fcf-protection 會定義 __CET__（-mshstk 不會），
-    # 所以單靠 -fcf-protection=none 就足以關掉 CET，-mshstk 不帶也無妨。
+    # 所以單靠 -fcf-protection=none 就足以關掉 CET。
+    #
+    # ── glibc 不參與全域 LTO（2026-11-09 定案，證據見 §7.4 規則 16a）──
+    # 這包在 lto-hardmode 試過「打補丁硬上 LTO」，逐層撞牆：gen-as-const 抽不到
+    # 常數、librtld.map 探測連結 lto1 崩、rtld 符號發現把 libc 成員全拉進來
+    # （沒有規則的 rtld-check_fds.os）、libc_pic.os 的 *__GI_* 別名缺 resolution
+    # data、最後 libc.so 的 .symver 預設版本在單一 LTRANS 單元裡重複宣告
+    # （localeconv@@GLIBC_2.2.5）。glibc 上游明確不支援 LTO，這些都是建置流程
+    # 假設「普通物件」造成的；能過的版本需要在 GCC 裡改 resolution 語意，
+    # 風險是產出「能過但語意微妙不同」的 libc——不值得拿 libc 冒這個險。
+    # 因此 PKGBUILD 寫 !lto（工作流的 !lto→lto 轉換會跳過這包），確保 64／32
+    # 位都完全不帶 -flto；其餘 90 包照吃 LTO。
     export CFLAGS="${CFLAGS} -fcf-protection=none"
     export CXXFLAGS="${CXXFLAGS} -fcf-protection=none"
-    #
-    # 2026-11-09 第三個根因（run 42564369964 實證）：elf/librtld.map 的探測
-    # 連結需要讀得到機器碼，但 glibc 全樹是 LTO slim 物件（只有位元碼）。
-    # 編成 fat LTO objects（-ffat-lto-objects）：同時含 LTO 位元碼與真實機器碼，
-    # 讓那一步 objcopy 剝掉 LTO 段後仍有符號與機器碼可用；其餘所有編譯與
-    # 最終連結照走 LTO，效果不變（代價只是物件檔變大）。
-    export CFLAGS="${CFLAGS} -ffat-lto-objects"
-    export CXXFLAGS="${CXXFLAGS} -ffat-lto-objects"
-    #
-    # 2026-11-09 第二個根因（run 42562203613 實證）：glibc 建置期間的 -flto 會讓
-    # gen-as-const 抽不到常數。症狀：longjmp.c 報 `SHADOW_STACK_POINTER_OFFSET
-    # undeclared`，但這不是 CET 問題——斷點在 glibc 的 gen-as-const.py。
-    # 機制（本機實測）：它把 `asm("/* @@@name@@@X@@@value@@@%0@@@end@@@ */" : : "i"(...))`
-    # 編成 C，跑 `gcc -S` 再從組語註解裡 regex 抽值。帶 -flto=auto 時 `gcc -S`
-    # 輸出的是 LTO 位元碼（.gnu.lto_* 段 + .base64），不是組語，`@@@name@@@`
-    # 註解全部消失 → jmp_buf-ssp.h 是空的 → 常數未定義 → 靜態斷言炸。
-    # 實測：無 -flto 時 .s 有 1 個 @@@name@@@；有 -flto=auto 時 0 個。
-    #
-    # 修法（用戶指示：不支持就讓它支持，打補丁也得支持）：
-    # 已在 prepare() 打補丁到 scripts/glibcextract.py，只在那一個抽常數的
-    # 子呼叫裡剝掉 -flto，其餘編譯／連結照吃全域 LTO。
-    # 所以這裡不再剝 -flto，glibc 本體真的吃到 LTO。
     # 64 位（書 8.5.1 configure 原文）：
     #   書的 rm -fv /usr/share/config.site 是清 chroot 宿主殘留，makepkg 構建樹天然乾淨，等價省略；
     #   書的兩階段安裝（dest install→拷 so→make install）是為「替換正在使用的 glibc」設計，

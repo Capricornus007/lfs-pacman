@@ -78,7 +78,7 @@ jobs:
             meson ninja tcl rsync pacman-contrib libpipeline re2c \
             lib32-glibc lib32-gcc-libs lib32-zlib lib32-zstd lib32-xz \
             lib32-ncurses lib32-pcre2 lib32-readline lib32-util-linux \
-            lib32-bzip2 lib32-openssl
+            lib32-bzip2 lib32-openssl github-cli
           useradd -m builder
       # checkout 需要容器內有 git，所以排在系統準備之後。
       - uses: actions/checkout@v7
@@ -91,7 +91,11 @@ jobs:
           # binutils→只關 gprofng、glibc→關 CET、grub/openssl→照吃全域 LTO）；
           # 任一包炸就單包修補丁，不再整包退回 !lto。
           sed -i 's/!lto/lto/g' /etc/makepkg.conf
-          sed -i 's/!lto/lto/g' packages/*/PKGBUILD
+          # glibc 例外：上游不支援 LTO，配方維持 !lto（證據與定案見手冊 §7.4 規則 16a）。
+          for f in packages/*/PKGBUILD; do
+            [ "$f" = packages/glibc/PKGBUILD ] && continue
+            sed -i 's/!lto/lto/g' "$f"
+          done
           grep -qE '^OPTIONS=\(.*lto' /etc/makepkg.conf || echo 'OPTIONS+=(lto)' >> /etc/makepkg.conf
           cat ci/makepkg-flags.conf >> /etc/makepkg.conf
           # ── LTO 相容性系統性修正（全 91 包共用）──
@@ -123,8 +127,21 @@ jobs:
           grep -E '^(CFLAGS|CXXFLAGS|LTOFLAGS)=' /etc/makepkg.conf | tail -3
           grep -E '^OPTIONS=' /etc/makepkg.conf | tail -1
           gcc -march=znver3 -dM -E - </dev/null | grep -m1 '__znver3__'
+      - name: 取得預製 gcc（bootstrap-lto 在 4 核 runner 會超過 6 小時上限）
+        # 2026-11-09：gcc 用 --with-build-config=bootstrap-lto 自舉，4 核 runner 實測
+        # 4h40m 仍未完成（run 42562203613 被取消）。改由本機 12 核建好、發布成
+        # current-mlfs-repo 的 release 資產，CI 直接取回入 feed（見手冊 §7.4 規則 16b）。
+        if: matrix.pkg.name == 'gcc'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p packages/gcc
+          gh release download current-mlfs-repo \
+            --pattern 'gcc-16.2.0-*.pkg.tar.zst' --dir packages/gcc --clobber
+          ls -la packages/gcc/*.pkg.tar.zst
       - name: 構建 ${{ matrix.pkg.name }}
         id: build
+        if: matrix.pkg.name != 'gcc'
         env:
           PKG_NAME: ${{ matrix.pkg.name }}
           PKG_VERSION: ${{ matrix.pkg.version }}
@@ -135,7 +152,7 @@ jobs:
           # build-recipe.sh 保留原本的 patch 注入、updpkgsums、--nodeps --nocheck。
           ci/build-recipe.sh "$PKG_NAME" "$PKG_VERSION" 2>&1 | tee /tmp/ci/build.log
       - name: 上傳套件 artifact
-        if: steps.build.outcome == 'success'
+        if: matrix.pkg.name == 'gcc' || steps.build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: pkg-${{ matrix.pkg.name }}
@@ -145,7 +162,7 @@ jobs:
           overwrite: true       # Re-run failed jobs 時同名 artifact 可覆寫
           compression-level: 0  # .pkg.tar.zst 已壓縮，別再壓一次
       - name: 上傳失敗日誌
-        if: always() && steps.build.outcome != 'success'
+        if: always() && matrix.pkg.name != 'gcc' && steps.build.outcome != 'success'
         uses: actions/upload-artifact@v7
         with:
           name: log-${{ matrix.pkg.name }}
@@ -159,7 +176,7 @@ jobs:
           IDX: ${{ matrix.pkg.index }}
           TOTAL: ${{ matrix.pkg.total }}
           NAME: ${{ matrix.pkg.name }}
-          OUTCOME: ${{ steps.build.outcome }}
+          OUTCOME: ${{ matrix.pkg.name == 'gcc' && 'prebuilt' || steps.build.outcome }}
         run: |
           mkdir -p results
           printf '%s\t%s\t%s\n' "$IDX" "$OUTCOME" "$NAME" > "results/$IDX-$NAME.tsv"
