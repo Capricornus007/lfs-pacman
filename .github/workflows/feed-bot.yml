@@ -220,6 +220,11 @@ jobs:
           pattern: pkg-*
           path: feed
           merge-multiple: true
+      - name: 讓容器內 gh 可讀取 checkout 的 Git 資料
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory /github/workspace
+
       - name: 合併成 feed 併發佈 release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
