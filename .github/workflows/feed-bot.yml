@@ -88,14 +88,11 @@ jobs:
           # PKGBUILD 的 !lto 會壓過 makepkg.conf 的 lto，所以兩邊的 !lto 都翻成 lto。
           # Arch 容器若 makepkg.conf 完全沒列 lto 再補 OPTIONS+=(lto)。
           # base toolchain 的 LTO 相容性由各包 PKGBUILD 自行處理（gcc→bootstrap-lto、
-          # binutils→只關 gprofng、glibc→關 CET、grub/openssl→照吃全域 LTO）；
+          # binutils→fat LTO objects、glibc→glibc-2.44-lto-1.patch、grub/openssl→照吃全域 LTO）；
           # 任一包炸就單包修補丁，不再整包退回 !lto。
           sed -i 's/!lto/lto/g' /etc/makepkg.conf
-          # glibc 例外：上游不支援 LTO，配方維持 !lto（證據與定案見手冊 §7.4 規則 16a）。
-          for f in packages/*/PKGBUILD; do
-            [ "$f" = packages/glibc/PKGBUILD ] && continue
-            sed -i 's/!lto/lto/g' "$f"
-          done
+          # 全 91 包開 LTO（含 glibc，2026-11-12 定案：glibc 全 LTO 建置 make check 0 FAIL）。
+          sed -i 's/!lto/lto/g' packages/*/PKGBUILD
           grep -qE '^OPTIONS=\(.*lto' /etc/makepkg.conf || echo 'OPTIONS+=(lto)' >> /etc/makepkg.conf
           cat ci/makepkg-flags.conf >> /etc/makepkg.conf
           # ── LTO 相容性系統性修正（全 91 包共用）──

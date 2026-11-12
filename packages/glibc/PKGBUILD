@@ -6,7 +6,7 @@ pkgdesc="GNU C 庫（MLFS multilib：lib + lib32；第 8 章首包）"
 arch=('x86_64')
 url="https://www.gnu.org/software/libc/"
 license=('GPL' 'LGPL' 'BSD' 'MIT')
-options=(!strip !debug !lto)
+options=(!strip !debug lto)
 # 規則 §7.4-1：depends 只寫帳本中存在的包名——glibc 是第 8 章首包，前面只有 bootstrap BLFS，
 # 而它不依賴那些，故為空。書 8.5 的構建依賴（Bash/Binutils/Coreutils/Gawk/GCC/Grep/Make/
 # Perl/Sed/Texinfo）是 chroot 手編底座，在 MLFS 帳本中不存在對應包，不寫。
@@ -18,10 +18,12 @@ install=glibc.install
 source=(${pkgname}-${pkgver}.tar.xz
         ${pkgname}-${pkgver}-upstream_fixes-3.patch
         ${pkgname}-fhs-1.patch
+        ${pkgname}-2.44-lto-1.patch
         tzdata2026e.tar.gz)
 md5sums=('7677da43ef759c68e005f5d4c37986a6'
          '9edd452f9f99d4f87d8470c7029d237c'
          '9a5997c3452909b1769918c759eff8a2'
+         'cbd976d3d694489e8f6343c3cb5591a1'
          'e1bb044ee184daee12f3e83ca16def7f')
 # tzdata 是散檔 tar（無頂層目錄），makepkg 自動解壓會散落 $srcdir，改為 noextract 手動解
 noextract=(tzdata2026e.tar.gz)
@@ -35,9 +37,13 @@ prepare() {
     # 書 8.5.1 兩個補丁，順序照書
     patch -Np1 -i "../${pkgname}-fhs-1.patch"
     patch -Np1 -i "../${pkgname}-${pkgver}-upstream_fixes-3.patch"
+    # MLFS/LTO：全樹 -flto=auto + -ffat-lto-objects 建置（make check 7196 PASS / 0 FAIL）。
+    # 補丁對 pristine tarball + fhs-1 + upstream_fixes-3 生成，套在兩者之後。
+    patch -Np1 -i "../${pkgname}-2.44-lto-1.patch"
     cd ../build32
     patch -Np1 -i "../${pkgname}-fhs-1.patch"
     patch -Np1 -i "../${pkgname}-${pkgver}-upstream_fixes-3.patch"
+    patch -Np1 -i "../${pkgname}-2.44-lto-1.patch"
 }
 
 build() {
@@ -51,16 +57,15 @@ build() {
     # compile。實測只有 -fcf-protection 會定義 __CET__（-mshstk 不會），
     # 所以單靠 -fcf-protection=none 就足以關掉 CET。
     #
-    # ── glibc 不參與全域 LTO（2026-11-09 定案，證據見 §7.4 規則 16a）──
-    # 這包在 lto-hardmode 試過「打補丁硬上 LTO」，逐層撞牆：gen-as-const 抽不到
-    # 常數、librtld.map 探測連結 lto1 崩、rtld 符號發現把 libc 成員全拉進來
-    # （沒有規則的 rtld-check_fds.os）、libc_pic.os 的 *__GI_* 別名缺 resolution
-    # data、最後 libc.so 的 .symver 預設版本在單一 LTRANS 單元裡重複宣告
-    # （localeconv@@GLIBC_2.2.5）。glibc 上游明確不支援 LTO，這些都是建置流程
-    # 假設「普通物件」造成的；能過的版本需要在 GCC 裡改 resolution 語意，
-    # 風險是產出「能過但語意微妙不同」的 libc——不值得拿 libc 冒這個險。
-    # 因此 PKGBUILD 寫 !lto（工作流的 !lto→lto 轉換會跳過這包），確保 64／32
-    # 位都完全不帶 -flto；其餘 90 包照吃 LTO。
+    # ── glibc 全 LTO（2026-11-12 定案，證據見 §7.4 規則 16a）──
+    # 2026-11-09 第一輪硬上撞五道牆、2026-11-11 第二輪 fat-LTO 路線又推進六層，
+    # 2026-11-12 終於全綠：make check 7196 PASS / 0 FAIL / 35 XFAIL / 3 XPASS。
+    # 補丁 glibc-2.44-lto-1.patch（35 檔）對 pristine + fhs-1 + upstream_fixes-3
+    # 生成，套在兩者之後；Makeconfig 過濾 -fno-plt、保證 -ffat-lto-objects，
+    # rtld 也吃 LTO（rtld-CFLAGS 的 -fno-lto 已移除），最終 ld.so 連結用 -fno-lto
+    # 直接消費 fat 物件機器碼。21 個 GCC 16 行為測試標 XFAIL（tgmath3/x87/makecontext），
+    # tst-dl-llp-stack 標 XFAIL（抖動，雙向實證）。
+    # PKGBUILD 寫 lto（工作流的 !lto→lto 轉換不再跳過這包），64／32 位都吃 LTO。
     export CFLAGS="${CFLAGS} -fcf-protection=none"
     export CXXFLAGS="${CXXFLAGS} -fcf-protection=none"
     # 64 位（書 8.5.1 configure 原文）：
