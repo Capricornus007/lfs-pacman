@@ -75,6 +75,7 @@ jobs:
             base-devel git curl jq python python-pip \
             python-flit-core python-setuptools python-wheel python-build python-installer \
             meson ninja tcl rsync pacman-contrib libpipeline re2c \
+            bison gawk perl texinfo gettext \
             lib32-glibc lib32-gcc-libs lib32-zlib lib32-zstd lib32-xz \
             lib32-ncurses lib32-pcre2 lib32-readline lib32-util-linux \
             lib32-bzip2 lib32-openssl github-cli
