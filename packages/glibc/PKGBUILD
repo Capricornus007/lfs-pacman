@@ -23,7 +23,7 @@ source=(${pkgname}-${pkgver}.tar.xz
 md5sums=('7677da43ef759c68e005f5d4c37986a6'
          '9edd452f9f99d4f87d8470c7029d237c'
          '9a5997c3452909b1769918c759eff8a2'
-         'ccb4c87d4ac6a6987874dbadb14a8f3c'
+         '9c59b9205f89c7d95063bc5bcc2f300c'
          'e1bb044ee184daee12f3e83ca16def7f')
 # tzdata 是散檔 tar（無頂層目錄），makepkg 自動解壓會散落 $srcdir，改為 noextract 手動解
 noextract=(tzdata2026e.tar.gz)

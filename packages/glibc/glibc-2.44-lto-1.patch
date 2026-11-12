@@ -1725,7 +1725,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
 diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.log' -x '*.pyc' -x autom4te.cache -x '*.sum' -x '*.out' -x '*.test-result' -x '*.dt' -x '*.tmp' a/elf/Makefile b/elf/Makefile
 --- a/elf/Makefile	2026-11-12 20:35:45.985128969 +0900
 +++ b/elf/Makefile	2026-11-12 20:36:14.315555702 +0900
-@@ -142,6 +142,24 @@
+@@ -142,6 +142,19 @@
    rtld \
    # rtld-routines
  
@@ -1745,7 +1745,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
  all-rtld-routines = $(rtld-routines) $(sysdep-rtld-routines)
  
  CFLAGS-dl-runtime.c += -fexceptions -fasynchronous-unwind-tables
-@@ -244,6 +262,9 @@
+@@ -244,6 +257,9 @@
  generated += sotruss
  libof-sotruss-lib = extramodules
  LDFLAGS-sotruss-lib.so += $(z-now-$(bind-now))
@@ -1755,7 +1755,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
  $(objpfx)sotruss-lib.so: $(objpfx)sotruss-lib.os
  	$(build-module-asneeded)
  $(objpfx)sotruss-lib.so: $(common-objpfx)libc.so $(objpfx)ld.so \
-@@ -1563,9 +1584,23 @@
+@@ -1563,9 +1579,23 @@
  endif
  
  # Command to link into a larger single relocatable object.
@@ -1781,7 +1781,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
  	$(reloc-link) -o $@ $^
  
  # Link together the dynamic linker into a single relocatable object.
-@@ -1582,6 +1617,8 @@
+@@ -1582,6 +1612,8 @@
  # discovery mechanism is not compatible with the libc implementation
  # when compiled for libc.
  rtld-stubbed-symbols = \
@@ -1790,7 +1790,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
    __libc_assert_fail \
    __libc_single_threaded_internal \
    __syscall_cancel_arch \
-@@ -1613,24 +1650,68 @@
+@@ -1613,24 +1645,68 @@
  rtld-stubbed-symbols += __stack_chk_fail __stack_chk_fail_local
  endif
  
@@ -1861,7 +1861,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
  	    LC_ALL=C grep -F -l /$$file \
  		  $(common-objpfx)stamp.os $(common-objpfx)*/stamp.os | \
  	    LC_ALL=C \
-@@ -1649,7 +1730,11 @@
+@@ -1649,7 +1725,11 @@
  	$(MAKE) -f $< -f rtld-Rules
  
  $(objpfx)librtld.os: $(objpfx)dl-allobjs.os $(objpfx)rtld-libc.a
@@ -1874,7 +1874,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
  		  -Wl,-Map,$@.map
  
  generated += librtld.map librtld.mk rtld-libc.a librtld.os.map
-@@ -3773,3 +3858,13 @@
+@@ -3773,3 +3853,13 @@
  		 $(objpfx)tst-recursive-tls > $@; \
  	$(evaluate-test)
  endif
@@ -2885,7 +2885,7 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
 diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.log' -x '*.pyc' -x autom4te.cache -x '*.sum' -x '*.out' -x '*.test-result' -x '*.dt' -x '*.tmp' a/sysdeps/unix/sysv/linux/x86_64/Makefile b/sysdeps/unix/sysv/linux/x86_64/Makefile
 --- a/sysdeps/unix/sysv/linux/x86_64/Makefile	2026-11-12 20:35:45.970817308 +0900
 +++ b/sysdeps/unix/sysv/linux/x86_64/Makefile	2026-11-12 20:35:46.860390720 +0900
-@@ -6,6 +6,12 @@
+@@ -6,6 +6,17 @@
  sysdep_routines += __start_context allocate-shadow-stack
  endif
  
