@@ -1737,11 +1737,6 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
 +# provides it directly.
 +rtld-routines += memrchr
 +
-+# MLFS/LTO: the __restore_rt trampoline moved to restore-rt.S (sysdep_routines
-+# under `signal' pulls it into libc).  rtld's own __libc_sigaction also
-+# references __restore_rt, so pull the same trampoline into the rtld set.
-+rtld-routines += restore-rt
-+
 +# MLFS: rtld's __environ / _environ / __libc_argc / __libc_argv are now
 +# defined directly in elf/dl-environ.c (which is an rtld object), so the symbol
 +# discovery probe no longer needs to pull csu/init-first.c (forbidden in ld.so)
@@ -2899,6 +2894,11 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
 +ifeq ($(subdir),signal)
 +sysdep_routines += restore-rt
 +endif
++
++# MLFS/LTO: rtld's own __libc_sigaction also references __restore_rt, so pull
++# the same trampoline into the rtld set.  Kept here (not in elf/Makefile) so
++# the i386 multilib build, which has no restore-rt.S, is unaffected.
++rtld-routines += restore-rt
 +
  ifeq ($(subdir),csu)
  gen-as-const-headers += ucontext_i.sym
