@@ -1627,33 +1627,9 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
  	  $(if $($(@F)-no-z-defs)$(no-z-defs),,-Wl,-z,defs) $(rtld-LDFLAGS) \
  	  $(if $($(@F)-no-dt-relr),$(no-dt-relr-ldflag),$(dt-relr-ldflag)) \
  	  $(extra-B-$(@F:lib%.so=%).so) -B$(csu-objpfx) \
-@@ -573,8 +581,36 @@
- 	  $(csu-objpfx)abi-note.o $(build-shlib-objlist)
+@@ -574,7 +582,12 @@
  endef
  
-+# LTO: libc.so (and linkobj/libc.so) must link the shared libgcc_eh rather
-+# than statically pulling libgcc, or the LTO-linked libgcc objects conflict.
-+# This helper is build-shlib-helper without -static-libgcc and with $(libgcc_eh).
-+define build-linkobj-libc-helper
-+# MLFS/LTO: same rationale as build-shlib-helper — use the LTO-optimized machine
-+# code in libc_pic.a rather than re-running whole-program LTO (which fails on the
-+# *__GI_* hidden aliases).  This helper links libc.so / linkobj/libc.so.
-+$(LINK.o) -fno-lto -shared -fPIC -ftls-model=initial-exec -Wl,-O1 $(sysdep-LDFLAGS) \
-+	  $(if $($(@F)-no-z-defs)$(no-z-defs),,-Wl,-z,defs) $(rtld-LDFLAGS) \
-+	  $(if $($(@F)-no-dt-relr),$(no-dt-relr-ldflag),$(dt-relr-ldflag)) \
-+	  $(extra-B-$(@F:lib%.so=%).so) -B$(csu-objpfx) \
-+	  $(extra-B-$(@F:lib%.so=%).so) $(load-map-file) \
-+	  -Wl,-soname=lib$(libprefix)$(@F:lib%.so=%).so$($(@F)-version) \
-+	  $(LDFLAGS.so) $(LDFLAGS-lib.so) $(LDFLAGS-$(@F:lib%.so=%).so) \
-+	  -L$(subst :, -L,$(rpath-link)) -Wl,-rpath-link=$(rpath-link) \
-+	  $(libgcc_eh)
-+endef
-+
-+define build-linkobj-libc
-+$(build-linkobj-libc-helper) -o $@ \
-+	  $(csu-objpfx)abi-note.o $(build-shlib-objlist)
-+endef
-+
  define build-module-helper
 -$(LINK.o) -shared -static-libgcc $(sysdep-LDFLAGS) $(rtld-LDFLAGS) \
 +# MLFS/LTO: same per-TU LTO rationale as build-shlib-helper — link the module
@@ -1665,63 +1641,19 @@ diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.lo
  	  $(if $($(@F)-no-z-defs)$(no-z-defs),,-Wl,-z,defs) \
  	  $(if $($(@F)-no-dt-relr),$(no-dt-relr-ldflag),$(dt-relr-ldflag)) \
  	  -B$(csu-objpfx) $(load-map-file) \
-@@ -606,7 +642,7 @@
- 	$(patsubst %_pic.a,$(whole-archive) %_pic.a $(no-whole-archive),\
- 		   $(filter-out %.lds $(map-file) $(+preinit) $(+postinit) \
- 				$(elf-objpfx)sofini.os $(+nolink-deps) \
--				$(link-libc-deps),$^))
-+				$(link-libc-deps) %libc_pic.opts,$^))
- 
- build-module-objlist = $(build-module-helper-objlist) $(LDLIBS-$(@F:%.so=%).so)
- build-shlib-objlist = $(build-module-helper-objlist) \
-@@ -621,6 +657,15 @@
+@@ -621,6 +634,12 @@
  LDLIBS-c.so += $(libc.so-gnulib)
  # Give libc.so an entry point and make it directly runnable itself.
  LDFLAGS-c.so += -e __libc_main
-+# MLFS/LTO: re-link libc_pic.a into libc_pic.os (relocatable) for
-+# .gnu.glibc-stub.* section discovery only.  This object is NOT consumed by
-+# the final libc.so link (that links libc_pic.a directly through LTO); it is
-+# just scanned by objdump to learn which .gnu.glibc-stub.* sections to strip.
-+# Under LTO a `-r` partial link cannot emit resolution data for the internal
-+# *__GI_* aliases and fails non-deterministically, so build libc_pic.os from
-+# the objects' machine code (fat LTO objects keep a machine-code copy thanks
-+# to -ffat-lto-objects).
++# MLFS/LTO: the `-r` partial link that builds libc_pic.os (consumed by the
++# libc.so rule via libc_pic.os.clean) cannot emit resolution data for the
++# internal *__GI_* hidden aliases under whole-program LTO.  Disable LTO for
++# this one link so it consumes the machine-code copy kept by -ffat-lto-objects;
++# the final libc.so link is -fno-lto too (see build-shlib-helper).
 +LDFLAGS-c_pic.os += -fno-lto
  # Pre-link the objects of libc_pic.a for .gnu.glibc-stub.* processing.
  $(common-objpfx)libc_pic.os: $(common-objpfx)libc_pic.a
  	$(LINK.o) -nostdlib -nostartfiles -r -o $@ \
-@@ -664,20 +709,27 @@
- $(common-objpfx)linkobj/libc.so: link-libc-deps = # empty
- 
- # Use our own special initializer and finalizer files for the libc.so
--# libraries.
--$(common-objpfx)libc.so: $(common-objpfx)libc_pic.os$(libc_pic_clean) \
-+# libraries.  Link libc_pic.a (fat LTO objects) directly through LTO so libc.so
-+# is a genuine LTO product; the *__GI_* internal aliases then carry IR and
-+# resolve.  The .gnu.glibc-stub.* sections learned from libc_pic.os are stripped
-+# afterwards via objcopy -R.
-+$(common-objpfx)libc.so: $(common-objpfx)libc_pic.a \
-+			 $(common-objpfx)libc_pic.opts \
- 			 $(elf-objpfx)sofini.os \
- 			 $(elf-objpfx)interp.os \
- 			 $(elf-objpfx)ld.so
--	$(build-shlib)
-+	$(build-linkobj-libc)
- 	$(call after-link,$@)
-+	$(OBJCOPY) @$(common-objpfx)libc_pic.opts $@
- 
- $(common-objpfx)linkobj/libc.so: $(common-objpfx)linkobj/libc_pic.a \
-+			 $(common-objpfx)libc_pic.opts \
- 			 $(elf-objpfx)sofini.os \
- 			 $(elf-objpfx)interp.os \
- 			 $(elf-objpfx)ld.so
--	$(build-shlib)
-+	$(build-linkobj-libc)
- 	$(call after-link,$@)
-+	$(OBJCOPY) @$(common-objpfx)libc_pic.opts $@
- 
- ifeq ($(build-shared),yes)
- $(common-objpfx)libc.so: $(common-objpfx)libc.map
 diff -ruN -x build -x build.bak41 -x '*.o' -x '*.os' -x '*.a' -x '*.so' -x '*.log' -x '*.pyc' -x autom4te.cache -x '*.sum' -x '*.out' -x '*.test-result' -x '*.dt' -x '*.tmp' a/elf/Makefile b/elf/Makefile
 --- a/elf/Makefile	2026-11-12 20:35:45.985128969 +0900
 +++ b/elf/Makefile	2026-11-12 20:36:14.315555702 +0900
