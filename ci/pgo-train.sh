@@ -10,6 +10,15 @@ pdir=$1; pd=$2
 cd "$pdir" || exit 0
 [ -w "$pd" ] || exit 0
 
+# 0) python 專屬訓練（v2.29）：CPython 官方 PGO 負載 -m test --pgo。
+#    PKGBUILD 已廢除 --enable-optimizations（避免雙重插樁），外層 PGO 全權負責，
+#    訓練負載由這裡補上 —— 用官方精選的 PGO 測試子集跑插樁直譯器。
+python_bin=$(find src -maxdepth 2 -path '*/Python-*/python' -type f 2>/dev/null | sort | head -n1)
+if [ -n "$python_bin" ] && [ -x "$python_bin" ]; then
+  echo "train: python 專屬負載 -m test --pgo @ ${python_bin%/*}（≤15 分鐘）"
+  ( cd "${python_bin%/*}" && timeout 900 ./python -m test --pgo >/dev/null 2>&1 ) || true
+fi
+
 # 1) 限時 make check（部分 profile 勝過沒有；-k 忽略單項測試失敗）
 find src -maxdepth 5 -name Makefile 2>/dev/null | sort | while read -r mk; do
   grep -qE '^check[:( ]' "$mk" 2>/dev/null || continue

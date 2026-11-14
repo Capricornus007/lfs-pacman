@@ -20,11 +20,16 @@ backup=(etc/pip.conf)
 
 build() {
     cd Python-${pkgver}
+    # v2.29 PGO：廢除 --enable-optimizations（CPython 內建 PGO 會做 profile-gen-stamp
+    # → 跑測試 → profile-opt 三段，與外層兩段式 PGO 的 -fprofile-generate 疊加成
+    # 雙重插樁，_freeze_module 啟動即 abort）。外層 PGO 全權負責插樁與訓練
+    # （pgo-train.sh 專屬分支跑 ./python -m test --pgo，即 CPython 官方 PGO 負載）。
+    # -fno-semantic-interposition 是 --enable-optimizations 的主要額外優化，在此補回。
+    export CFLAGS="${CFLAGS} -fno-semantic-interposition"
     # 書 8.55 pre 1–2
-    ./configure --prefix=/usr          \
-                --enable-shared        \
-                --with-system-expat    \
-                --enable-optimizations \
+    ./configure --prefix=/usr            \
+                --enable-shared          \
+                --with-system-expat      \
                 --without-static-libpython
     make
 }
