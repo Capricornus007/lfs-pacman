@@ -87,15 +87,18 @@ gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
 # makepkg -p 自訂 conf 會踩 readonly OPTIONS（run 43623494641 實測：
 # ".wb-pgo1.conf: line 1: OPTIONS: readonly variable" → PKGBUILD 變數解析全空，
 # 90/91 包全死）。改為直接對 /etc/makepkg.conf 追加旗標、每段前快照後還原；
-# pass1 用 --nostrip 命令列旗標保住 gcov 節區（OPTIONS 不可再賦值）。
+# pass1 的 strip 關閉改由追加 OPTIONS=(!strip … lto) 到 /etc/makepkg.conf 末尾
+# （readonly 在 conf 讀完後才設，追加賦值合法）。
 if [ -z "${NO_PGO:-}" ]; then
   PD="/tmp/pgo-data-$name"; MKCONF_BAK="/tmp/makepkg.conf.bak-$name"
   cp /etc/makepkg.conf "$MKCONF_BAK"
   rm -rf "$PD" "$pdir/src" "$pdir/pkg"; mkdir -p "$PD"
   chown -R builder "$PD" 2>/dev/null || true
-  printf '\n# v2.26 PGO pass1\nCFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nCXXFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\n' "$PD" "$PD" >> /etc/makepkg.conf
+  # OPTIONS 追加在 /etc/makepkg.conf 末尾＝還在 makepkg 設 readonly 之前，合法；
+  # strip 關掉保 gcov 節區，lto 保留。
+  printf '\n# v2.26 PGO pass1\nCFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nCXXFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nOPTIONS=(!strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass1（插樁編譯）：$name"
-  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck --nostrip" \
+  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck" \
     || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass1 失敗：$name"; exit 1; }
   cp "$MKCONF_BAK" /etc/makepkg.conf
   echo "PGO 訓練：$name"
