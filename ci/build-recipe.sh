@@ -106,9 +106,37 @@ if [ -z "${NO_PGO:-}" ]; then
   rm -rf "$pdir/src" "$pdir/pkg"
   printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
-  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck" \
-    || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass2 失敗：$name"; exit 1; }
-  cp "$MKCONF_BAK" /etc/makepkg.conf
+  if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
+    cp "$MKCONF_BAK" /etc/makepkg.conf
+    # 診斷：run 43627019385 實測 pass2 死在 configure 編譯器自檢
+    # （cannot compute suffix of executables），本地系統 gcc 無法重現 →
+    # 懷疑容器 /usr/local/bin 自編 gcc 不認 pass2 某旗標。印出關鍵證據。
+    echo "═══ PGO pass2 診斷：$name ═══"
+    gcc --version | head -1
+    echo 'int main(){return 0;}' > /tmp/wb-conftest.c
+    for probe in "-fprofile-use=$PD -fprofile-correction -Wno-missing-profile -fprofile-partial-training" \
+                 "-fprofile-use=$PD -Wno-missing-profile"; do
+      if gcc $probe /tmp/wb-conftest.c -o /tmp/wb-conftest 2>/tmp/wb-probe.err; then
+        echo "probe OK: $probe"
+      else
+        echo "probe FAIL: $probe"; head -3 /tmp/wb-probe.err
+      fi
+    done
+    tail -20 "$pdir/src"/*/config.log 2>/dev/null | head -20
+    # 二級降級：只留 -fprofile-use（去掉 -fprofile-correction / -fprofile-partial-training）
+    echo "PGO pass2 重試（精簡旗標）：$name"
+    printf '\n# v2.26 PGO pass2 retry\nCFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nCXXFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\n' "$PD" "$PD" >> /etc/makepkg.conf
+    if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
+      cp "$MKCONF_BAK" /etc/makepkg.conf
+      echo "═══ PGO-FALLBACK：$name pass2 兩種旗標都炸，改出無 PGO 最終包（大聲標記，非靜默）═══"
+      su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck" \
+        || { echo "構建失敗（含 fallback）：$name"; exit 1; }
+      echo "PGO-FALLBACK-USED：$name"
+    fi
+    cp "$MKCONF_BAK" /etc/makepkg.conf
+  else
+    cp "$MKCONF_BAK" /etc/makepkg.conf
+  fi
 else
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" \
     || { echo "構建失敗：$name"; exit 1; }
