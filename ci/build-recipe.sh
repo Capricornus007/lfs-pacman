@@ -104,8 +104,15 @@ if [ -z "${NO_PGO:-}" ]; then
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck" \
     || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass1 失敗：$name"; exit 1; }
   cp "$MKCONF_BAK" /etc/makepkg.conf
+  # conftest.gcda 污染（run 43631404963 coreutils／run 43627019385 attr 實測）：
+  # pass1 configure 每個測試程式都寫 $PD/<來源路徑>#conftest.gcda，pass2 的
+  # configure conftest 路徑與 pass1 完全相同 → -fprofile-use 讀到 checksum
+  # 不匹配的殘留 profile，configure 自檢「cannot compute suffix of executables」
+  # 直接炸。真實來源的 .gcda 保留，只清 conftest 產物。
+  find "$PD" -name 'conftest.gcda' -delete 2>/dev/null || true
   echo "PGO 訓練：$name"
   su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
+  find "$PD" -name 'conftest.gcda' -delete 2>/dev/null || true
   rm -rf "$pdir/src" "$pdir/pkg"
   printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
@@ -126,12 +133,23 @@ if [ -z "${NO_PGO:-}" ]; then
       fi
     done
     tail -20 "$pdir/src"/*/config.log 2>/dev/null | head -20
+    # config.log 尾段只有 confdefs.h，gcc 真實報錯在「cannot compute suffix」
+    # 之前的測試命令區塊；抓出來看真正死因。
+    for cfglog in "$pdir/src"/*/config.log; do
+      [ -f "$cfglog" ] || continue
+      grep -B25 'cannot compute suffix' "$cfglog" 2>/dev/null | tail -35 && break
+    done
     # 二級降級：只留 -fprofile-use（去掉 -fprofile-correction / -fprofile-partial-training）
+    # 重試前必須清 srcdir/pkg：makepkg 不重新解壓已存在的 srcdir，補丁
+    # 「already exists」會讓 prepare() 先炸，重試根本走不到 build()
+    # （run 43631404963 coreutils 實測）。
+    rm -rf "$pdir/src" "$pdir/pkg"
     echo "PGO pass2 重試（精簡旗標）：$name"
     printf '\n# v2.26 PGO pass2 retry\nCFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nCXXFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nLDFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
     if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
       cp "$MKCONF_BAK" /etc/makepkg.conf
       echo "═══ PGO-FALLBACK：$name pass2 兩種旗標都炸，改出無 PGO 最終包（大聲標記，非靜默）═══"
+      rm -rf "$pdir/src" "$pdir/pkg"
       su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck" \
         || { echo "構建失敗（含 fallback）：$name"; exit 1; }
       echo "PGO-FALLBACK-USED：$name"
