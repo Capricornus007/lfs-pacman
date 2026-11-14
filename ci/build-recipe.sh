@@ -89,7 +89,24 @@ gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
 # 90/91 包全死）。改為直接對 /etc/makepkg.conf 追加旗標、每段前快照後還原；
 # pass1 的 strip 關閉改由追加 OPTIONS=(!strip … lto) 到 /etc/makepkg.conf 末尾
 # （readonly 在 conf 讀完後才設，追加賦值合法）。
-if [ -z "${NO_PGO:-}" ]; then
+#
+# ── v2.28 外層 PGO 豁免清單（run 43635076806 glibc/python 實測定案）─────────
+# glibc：ld.so 以 -nostdlib -nostartfiles 鏈接，libgcov 的 profiler（_gcov.o）
+#        引用 malloc/free/calloc/__memcpy_chk/__pthread_mutex_lock/newlocale，
+#        這些符號在 ld.so 裡不存在 → 外層插樁根本不可行（數百個 undefined
+#        reference，pass1 直接炸）。glibc 保留全 LTO（glibc-2.44-lto-1.patch）。
+# python：PKGBUILD 用 --enable-optimizations，CPython 自帶完整 PGO 管線
+#        （profile-gen-stamp → 跑測試 → profile-opt）。外層再注入
+#        -fprofile-generate=/tmp/pgo-data-python 形成雙重 gcov 插樁，
+#        _freeze_module 啟動即 Aborted (core dumped)。走 CPython 原生 PGO
+#        （用自家測試套件訓練）比外層管線更準確。
+# 兩者都不是版本回退：LTO 全保留，python 的 PGO 由原生管線承擔。
+case "$name" in
+  glibc|python)
+    echo "PGO-SKIP：$name（外層 PGO 豁免清單，見 build-recipe.sh v2.28 註解）"
+    NO_PGO=1 ;&  # 落穿到 *) 走普通構建（LTO 全保留）
+  *)
+    if [ -z "${NO_PGO:-}" ]; then
   PD="/tmp/pgo-data-$name"; MKCONF_BAK="/tmp/makepkg.conf.bak-$name"
   cp /etc/makepkg.conf "$MKCONF_BAK"
   rm -rf "$PD" "$pdir/src" "$pdir/pkg"; mkdir -p "$PD"
@@ -162,4 +179,6 @@ else
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" \
     || { echo "構建失敗：$name"; exit 1; }
 fi
+    ;;
+esac
 echo "OK：$name $(ls "$pdir"/*.pkg.tar.zst 2>/dev/null | tail -1)"
