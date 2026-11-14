@@ -55,5 +55,52 @@ PY
 chown -R builder . 2>/dev/null || true
 # /usr/local/bin 放 znver3 編譯器外掛；su 會重建 PATH，這裡明確帶過去，
 # 確保 makepkg／configure／Makefile 看到的 gcc 都是外掛版（64/32 位一體）。
-su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" || { echo "構建失敗：$name"; exit 1; }
-echo "OK：$name $(ls "$pdir"/*.pkg.tar.zst)"
+
+# ── v2.26（2026-11-15 用戶定案）：全量兩段式 PGO ────────────────────────────
+# 100 包無白名單全部套用（gcc／glibc 在內）。流程：
+#   pass1  CFLAGS+=-fprofile-generate=$PD -fprofile-update=atomic，
+#          OPTIONS 用 !strip（strip 會剝掉 gcov 節區，.gcda 就寫不出來），
+#          makepkg --noarchive 編出插樁樹 → ci/pgo-train.sh 限時訓練收 .gcda
+#   pass2  清樹重編，CFLAGS+=-fprofile-use=$PD -fprofile-correction
+#          -Wno-missing-profile -fprofile-partial-training → strip 出最終包
+# profile 與兩份 pass conf 都放 /tmp，不污染倉庫樹；訓練只收集不判死。
+# 緊急旁路：NO_PGO=1 跳過 PGO 單包重試（僅炸包時用，同 v2.25 單包降級慣例）。
+gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
+  local pass=$1 out=$2 pd=$3 extra cf cxf ld lto
+  cf=$(set +u; . /etc/makepkg.conf; printf '%s' "${CFLAGS:-}")
+  cxf=$(set +u; . /etc/makepkg.conf; printf '%s' "${CXXFLAGS:-$cf}")
+  ld=$(set +u; . /etc/makepkg.conf; printf '%s' "${LDFLAGS:-}")
+  lto=$(set +u; . /etc/makepkg.conf; printf '%s' "${LTOFLAGS:--flto=auto}")
+  case "$pass" in
+    pass1) extra="-fprofile-generate=$pd -fprofile-update=atomic"
+           printf 'OPTIONS=(!strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' ;;
+    pass2) extra="-fprofile-use=$pd -fprofile-correction -Wno-missing-profile -fprofile-partial-training"
+           printf 'OPTIONS=(strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' ;;
+  esac > "$out"
+  printf 'MAKEFLAGS="-j$(nproc)"\n'  >> "$out"
+  printf 'CFLAGS="%s %s"\n'  "$cf"  "$extra" >> "$out"
+  printf 'CXXFLAGS="%s %s"\n' "$cxf" "$extra" >> "$out"
+  printf 'LDFLAGS="%s"\n'  "$ld"  >> "$out"
+  printf 'LTOFLAGS="%s"\n' "$lto" >> "$out"
+}
+
+if [ -z "${NO_PGO:-}" ]; then
+  PD="/tmp/pgo-data-$name"; C1="/tmp/makepkg-pgo1-$name.conf"; C2="/tmp/makepkg-pgo2-$name.conf"
+  rm -rf "$PD" "$pdir/src" "$pdir/pkg"; mkdir -p "$PD"
+  chown -R builder "$PD" 2>/dev/null || true
+  gen_pgo_conf pass1 "$C1" "$PD"
+  echo "PGO pass1（插樁編譯）：$name"
+  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck -p '$C1'" \
+    || { echo "PGO pass1 失敗：$name"; exit 1; }
+  echo "PGO 訓練：$name"
+  su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
+  rm -rf "$pdir/src" "$pdir/pkg"
+  gen_pgo_conf pass2 "$C2" "$PD"
+  echo "PGO pass2（套用 profile）：$name"
+  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck -p '$C2'" \
+    || { echo "PGO pass2 失敗：$name"; exit 1; }
+else
+  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" \
+    || { echo "構建失敗：$name"; exit 1; }
+fi
+echo "OK：$name $(ls "$pdir"/*.pkg.tar.zst 2>/dev/null | tail -1)"

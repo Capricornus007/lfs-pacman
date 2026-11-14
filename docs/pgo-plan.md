@@ -2,6 +2,12 @@
 
 > 疊在 feed-bot #16（`-O3` + LTO + 激進旗標）之上的下一階。
 > 目標：新系統的 feed 包。工具鏈一律裝在 **CI 構建容器**，不裝到使用者本機（Artix）桌面。
+>
+> **狀態（2026-11-15）**：§3 兩段式 PGO 已於 v2.26 落地——用戶定案**全量 100 包、
+> 無白名單**（gcc／glibc 在內），實作在 `ci/build-recipe.sh`（pass1 插樁 →
+> `ci/pgo-train.sh` 限時訓練 → pass2 套用）。§4 AutoFDO／BOLT 依用戶定案為
+> 「新系統起來後的**雲端**疊加」：本機僅 perf 錄製＋上傳 perf.data，
+> **編譯全在 GitHub Actions，不在本機**。
 
 ## 1. 三種技術與工具歸屬
 

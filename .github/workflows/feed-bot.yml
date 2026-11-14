@@ -145,7 +145,7 @@ jobs:
           PKG_NAME: ${{ matrix.pkg.name }}
           PKG_VERSION: ${{ matrix.pkg.version }}
         run: |
-          chmod +x ci/build-recipe.sh ci/scan-updates.py ci/prepare-matrix.py
+          chmod +x ci/build-recipe.sh ci/pgo-train.sh ci/scan-updates.py ci/prepare-matrix.py
           mkdir -p /tmp/ci
           set -o pipefail
           # build-recipe.sh 保留原本的 patch 注入、updpkgsums、--nodeps --nocheck。
