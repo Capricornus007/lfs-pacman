@@ -84,25 +84,28 @@ gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
   printf 'LTOFLAGS="%s"\n' "$lto" >> "$out"
 }
 
+# makepkg -p 自訂 conf 會踩 readonly OPTIONS（run 43623494641 實測：
+# ".wb-pgo1.conf: line 1: OPTIONS: readonly variable" → PKGBUILD 變數解析全空，
+# 90/91 包全死）。改為直接對 /etc/makepkg.conf 追加旗標、每段前快照後還原；
+# pass1 用 --nostrip 命令列旗標保住 gcov 節區（OPTIONS 不可再賦值）。
 if [ -z "${NO_PGO:-}" ]; then
-  # makepkg -p 只吃「當前工作目錄內」的相對路徑（run 43620542336 實測：
-  # /tmp/...conf 被拒 "must be in the current working directory"），conf 落在
-  # $pdir 內以相對路徑傳，兩段結束即刪；profile 數據仍放 /tmp。
-  PD="/tmp/pgo-data-$name"; C1=".wb-pgo1.conf"; C2=".wb-pgo2.conf"
+  PD="/tmp/pgo-data-$name"; MKCONF_BAK="/tmp/makepkg.conf.bak-$name"
+  cp /etc/makepkg.conf "$MKCONF_BAK"
   rm -rf "$PD" "$pdir/src" "$pdir/pkg"; mkdir -p "$PD"
   chown -R builder "$PD" 2>/dev/null || true
-  gen_pgo_conf pass1 "$C1" "$PD"
+  printf '\n# v2.26 PGO pass1\nCFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nCXXFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\n' "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass1（插樁編譯）：$name"
-  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck -p '$C1'" \
-    || { echo "PGO pass1 失敗：$name"; exit 1; }
+  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck --nostrip" \
+    || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass1 失敗：$name"; exit 1; }
+  cp "$MKCONF_BAK" /etc/makepkg.conf
   echo "PGO 訓練：$name"
   su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
-  rm -rf "$pdir/src" "$pdir/pkg"; rm -f "$pdir/$C1"
-  gen_pgo_conf pass2 "$C2" "$PD"
+  rm -rf "$pdir/src" "$pdir/pkg"
+  printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
-  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck -p '$C2'" \
-    || { echo "PGO pass2 失敗：$name"; exit 1; }
-  rm -f "$pdir/$C2"
+  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck" \
+    || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass2 失敗：$name"; exit 1; }
+  cp "$MKCONF_BAK" /etc/makepkg.conf
 else
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" \
     || { echo "構建失敗：$name"; exit 1; }
