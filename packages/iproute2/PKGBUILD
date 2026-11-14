@@ -17,6 +17,8 @@ prepare() {
     # 書 8.68 pre 1
     sed -i /ARPD/d Makefile
     rm -fv man/man8/arpd.8
+    # flex ≥ 2.6.4 將 yyunput 定義為單參數巨集，與 emp_ematch.l 內的舊原型衝突，刪除之
+    sed -i '/yyunput/d' tc/emp_ematch.l
 }
 
 build() {
