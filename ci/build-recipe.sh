@@ -96,7 +96,10 @@ if [ -z "${NO_PGO:-}" ]; then
   chown -R builder "$PD" 2>/dev/null || true
   # OPTIONS 追加在 /etc/makepkg.conf 末尾＝還在 makepkg 設 readonly 之前，合法；
   # strip 關掉保 gcov 節區，lto 保留。
-  printf '\n# v2.26 PGO pass1\nCFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nCXXFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nOPTIONS=(!strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' "$PD" "$PD" >> /etc/makepkg.conf
+  # PGO 旗標必須同時進 LDFLAGS：LTO 下最終鏈接由 lto1 重編，dhcpcd 類
+  # 「編譯用 CFLAGS、鏈接只用 LDFLAGS」的構建系統會漏掉 libgcov，
+  # 報 undefined reference to __gcov_*（run #51 dhcpcd 實測）。
+  printf '\n# v2.26 PGO pass1\nCFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nCXXFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nLDFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nOPTIONS=(!strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass1（插樁編譯）：$name"
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck" \
     || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass1 失敗：$name"; exit 1; }
@@ -104,7 +107,7 @@ if [ -z "${NO_PGO:-}" ]; then
   echo "PGO 訓練：$name"
   su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
   rm -rf "$pdir/src" "$pdir/pkg"
-  printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" >> /etc/makepkg.conf
+  printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
   if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
     cp "$MKCONF_BAK" /etc/makepkg.conf
@@ -125,7 +128,7 @@ if [ -z "${NO_PGO:-}" ]; then
     tail -20 "$pdir/src"/*/config.log 2>/dev/null | head -20
     # 二級降級：只留 -fprofile-use（去掉 -fprofile-correction / -fprofile-partial-training）
     echo "PGO pass2 重試（精簡旗標）：$name"
-    printf '\n# v2.26 PGO pass2 retry\nCFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nCXXFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\n' "$PD" "$PD" >> /etc/makepkg.conf
+    printf '\n# v2.26 PGO pass2 retry\nCFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nCXXFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nLDFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
     if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
       cp "$MKCONF_BAK" /etc/makepkg.conf
       echo "═══ PGO-FALLBACK：$name pass2 兩種旗標都炸，改出無 PGO 最終包（大聲標記，非靜默）═══"
