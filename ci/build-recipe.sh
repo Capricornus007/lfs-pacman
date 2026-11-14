@@ -85,7 +85,10 @@ gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
 }
 
 if [ -z "${NO_PGO:-}" ]; then
-  PD="/tmp/pgo-data-$name"; C1="/tmp/makepkg-pgo1-$name.conf"; C2="/tmp/makepkg-pgo2-$name.conf"
+  # makepkg -p 只吃「當前工作目錄內」的相對路徑（run 43620542336 實測：
+  # /tmp/...conf 被拒 "must be in the current working directory"），conf 落在
+  # $pdir 內以相對路徑傳，兩段結束即刪；profile 數據仍放 /tmp。
+  PD="/tmp/pgo-data-$name"; C1=".wb-pgo1.conf"; C2=".wb-pgo2.conf"
   rm -rf "$PD" "$pdir/src" "$pdir/pkg"; mkdir -p "$PD"
   chown -R builder "$PD" 2>/dev/null || true
   gen_pgo_conf pass1 "$C1" "$PD"
@@ -94,11 +97,12 @@ if [ -z "${NO_PGO:-}" ]; then
     || { echo "PGO pass1 失敗：$name"; exit 1; }
   echo "PGO 訓練：$name"
   su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
-  rm -rf "$pdir/src" "$pdir/pkg"
+  rm -rf "$pdir/src" "$pdir/pkg"; rm -f "$pdir/$C1"
   gen_pgo_conf pass2 "$C2" "$PD"
   echo "PGO pass2（套用 profile）：$name"
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck -p '$C2'" \
     || { echo "PGO pass2 失敗：$name"; exit 1; }
+  rm -f "$pdir/$C2"
 else
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" \
     || { echo "構建失敗：$name"; exit 1; }
