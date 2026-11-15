@@ -35,8 +35,12 @@ build() {
     # 書 8.23.2：configfsf 覆蓋 config 檔 → ABI=32 configure → sed Makefile → make
     cp -v configfsf.guess config.guess
     cp -v configfsf.sub   config.sub
-    CFLAGS="-m32 -march=znver3 -mtune=znver3 -O2 -pedantic -fomit-frame-pointer" \
-    CXXFLAGS="-m32 -march=znver3 -mtune=znver3 -O2 -pedantic -fomit-frame-pointer" \
+    # v2.30：不再硬編 -O2（會連全域 LTO/PGO 一起隔絕）。改為 -m32 前綴＋
+    # 全域 CFLAGS（znver3/-O3/LTO/graphite/PGO 全量），只補書本的 -pedantic
+    # 與 -fomit-frame-pointer；check() 兩棵樹都跑 make check，32 位若有問題
+    # 會在測試期暴露。
+    CFLAGS="-m32 ${CFLAGS} -pedantic -fomit-frame-pointer" \
+    CXXFLAGS="-m32 ${CXXFLAGS} -pedantic -fomit-frame-pointer" \
     ABI="32"                               \
     PKG_CONFIG_PATH="/usr/lib32/pkgconfig" \
     ./configure --prefix=/usr              \
