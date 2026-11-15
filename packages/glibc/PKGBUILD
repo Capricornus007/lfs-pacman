@@ -136,19 +136,28 @@ build() {
                 echo "::error::v2.32 sed 未命中 $_mc（lto 補丁可能改了 Makeconfig）" >&2
                 exit 1
             fi
-            # ── v2.35：把 -lgcov 放進 static 連結的 --start-group 內 ──
+            # ── v2.36：把 -lgcov 與 -latomic 放進 static 連結的 --start-group 內 ──
             # 只動 link-libc-static / link-libc-static-tests 兩行；兩者都是
             # `-Wl,--start-group libc.a <gnulib> -Wl,--end-group` 形態。
-            sed -i -E '/^link-libc-static(-tests)? = / s/ -Wl,--end-group$/ -lgcov -Wl,--end-group/' "$_mc"
-            if ! grep -q '^link-libc-static = .* -lgcov -Wl,--end-group' "$_mc"; then
-                echo "::error::v2.35 sed 未命中 $_mc 的 link-libc-static（lto 補丁可能改了 Makeconfig）" >&2
+            #
+            # 為什麼要 -latomic（v2.35 run 43735504573 實測）：
+            # 建置用 -fprofile-update=atomic，插樁的計數器是 8 位元組原子遞增；
+            # 32 位元 x86 沒有原生的 64 位元原子加，libgcov.a 因此引用
+            # `__atomic_fetch_add_8`，該符號只在 libatomic 裡。v2.35 把 -lgcov
+            # 放進 group 後 sln/ldconfig 全過了，卻在 libc_pic.os 連結時爆：
+            #   /usr/bin/ld: libc_pic.os.clean: in function `__mcount_internal':
+            #   (.text+0x3943fa): undefined reference to `__atomic_fetch_add_8'
+            # 所以 group 內必須同時有 -latomic，讓 libgcov 的原子引用回得了頭。
+            sed -i -E '/^link-libc-static(-tests)? = / s/ -Wl,--end-group$/ -lgcov -latomic -Wl,--end-group/' "$_mc"
+            if ! grep -q '^link-libc-static = .* -lgcov -latomic -Wl,--end-group' "$_mc"; then
+                echo "::error::v2.36 sed 未命中 $_mc 的 link-libc-static（lto 補丁可能改了 Makeconfig）" >&2
                 exit 1
             fi
-            if ! grep -q '^link-libc-static-tests = .* -lgcov -Wl,--end-group' "$_mc"; then
-                echo "::error::v2.35 sed 未命中 $_mc 的 link-libc-static-tests" >&2
+            if ! grep -q '^link-libc-static-tests = .* -lgcov -latomic -Wl,--end-group' "$_mc"; then
+                echo "::error::v2.36 sed 未命中 $_mc 的 link-libc-static-tests" >&2
                 exit 1
             fi
-            echo "v2.35: $_mc 的 static group 已加入 -lgcov"
+            echo "v2.36: $_mc 的 static group 已加入 -lgcov -latomic"
         done
     fi
     rm -rf build; mkdir -pv build
