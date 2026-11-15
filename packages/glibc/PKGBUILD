@@ -97,21 +97,26 @@ build() {
         "$_pgo_rtld_noinstr"         "$_pgo_rtld_noinstr" >> elf/Makefile
     printf '\n# v2.31 PGO: rtld components must not be instrumented (keep official no-stack-protector)\nrtld-CFLAGS += %s\n' \
         "$_pgo_rtld_noinstr" >> elf/rtld-Rules
-    # ── v2.34 PGO：sln 鏈接必須濾掉 -fprofile-generate（run 43711970021 實測）──
-    # LDFLAGS 的 -fprofile-generate=/tmp/pgo-data-glibc 使 gcc spec 在鏈接末尾
-    # 追加 libgcov.a；sln 是 -static -nostdlib，libgcov.a 的 _gcov.o 引用
-    # feof/fseek/fdopen/__sprintf_chk/__memcpy_chk/...——這些符號雖然都在
-    # 構建樹 libc.a 裡（ar 清單已核對），但 spec 追加的 libgcov.a 排在
-    # --start-group 之外，組內 libc.a 無法回頭解析 → undefined reference。
-    # v2.33 把 -lgcov 放進組內也沒用（run 43711970021 實測，錯誤一字不差）。
-    # 正解＝對 sln 目標覆寫 LDFLAGS，濾掉 -fprofile-generate/-fprofile-arcs，
-    # spec 就不會追加 libgcov.a；sln.o 本來就以 -fno-profile-generate 編譯
-    # （v2.31），沒有 gcov 引用，鏈接自然成功。
-    cat >> elf/Makefile <<'EOF'
-
-# v2.34 PGO: sln must not link libgcov
-$(objpfx)sln: LDFLAGS := $(filter-out -fprofile-generate% -fprofile-arcs%,$(LDFLAGS))
-EOF
+    # ── v2.35 PGO：static helper 的 --start-group 內必須有 libgcov ──
+    # 兩輪實測（用戶提供的 #60/#61 完整 build.log）交叉定案：
+    #   #60 v2.33 → 失敗在 elf/ldconfig：`libgcov.a(_gcov.o): undefined
+    #       reference to feof/fseek/fdopen/__sprintf_chk/__memcpy_chk`。
+    #       LDFLAGS 的 -fprofile-generate 讓 gcc spec 把 libgcov.a 追加在
+    #       連結末尾（`--start-group libc.a -lgcc --end-group` **之外**），
+    #       libgcov 的 libc 引用無法回頭找組內已掃完的 libc.a。
+    #   #61 v2.34 → 失敗在 elf/sln：改為對 sln 覆寫 LDFLAGS 濾掉
+    #       -fprofile-generate 後 spec 不再追加 libgcov，但 **libc.a 本身
+    #       是插樁編譯的**（libc.a(dlsym.o)/dlopen.o/dlmopen.o 等），
+    #       __gcov_init/__gcov_merge_add/__gcov_time_profiler_counter 等
+    #       全部無解。
+    # 兩個方向各修一半：static 連結「既要」libgcov（解析 libc.a 的
+    # __gcov_*）「又要」它在組內（libgcov 的 feof 反查 libc.a）。
+    # Makeconfig:669 定義
+    #   link-libc-static = -Wl,--start-group libc.a $(static-gnulib) -Wl,--end-group
+    # 全域在 --end-group 前插入 -lgcov，一次覆蓋 sln/ldconfig/iconvconfig/
+    # iconv 等**所有** +link-static 目標（先前只挑 sln 才會漏掉 ldconfig）。
+    # 組內解析完所有 gcov 符號後，spec 追加在組外的 libgcov.a 不會被抽
+    # 任何 archive member，無害；pass2（-fprofile-use）不進這個分支。
     # ── v2.32 PGO：pass1 鏈接保留 ld.so／libgcc_s（run 43672200830 實測）──
     # LDFLAGS 的 -fprofile-generate 使 gcc 在鏈接末尾拉入 libgcov.a，其
     # profiler 引用 __tls_get_addr@@GLIBC_2.3——構建樹 libc.so.6 不導出
@@ -131,6 +136,19 @@ EOF
                 echo "::error::v2.32 sed 未命中 $_mc（lto 補丁可能改了 Makeconfig）" >&2
                 exit 1
             fi
+            # ── v2.35：把 -lgcov 放進 static 連結的 --start-group 內 ──
+            # 只動 link-libc-static / link-libc-static-tests 兩行；兩者都是
+            # `-Wl,--start-group libc.a <gnulib> -Wl,--end-group` 形態。
+            sed -i -E '/^link-libc-static(-tests)? = / s/ -Wl,--end-group$/ -lgcov -Wl,--end-group/' "$_mc"
+            if ! grep -q '^link-libc-static = .* -lgcov -Wl,--end-group' "$_mc"; then
+                echo "::error::v2.35 sed 未命中 $_mc 的 link-libc-static（lto 補丁可能改了 Makeconfig）" >&2
+                exit 1
+            fi
+            if ! grep -q '^link-libc-static-tests = .* -lgcov -Wl,--end-group' "$_mc"; then
+                echo "::error::v2.35 sed 未命中 $_mc 的 link-libc-static-tests" >&2
+                exit 1
+            fi
+            echo "v2.35: $_mc 的 static group 已加入 -lgcov"
         done
     fi
     rm -rf build; mkdir -pv build
@@ -149,12 +167,8 @@ EOF
         "$_pgo_rtld_noinstr" "$_pgo_rtld_noinstr" >> elf/Makefile
     printf '\n# v2.31 PGO: rtld components must not be instrumented (keep official no-stack-protector)\nrtld-CFLAGS += %s\n' \
         "$_pgo_rtld_noinstr" >> elf/rtld-Rules
-    # v2.34 PGO：sln 鏈接濾掉 -fprofile-generate（同 64 位）
-    cat >> elf/Makefile <<'EOF'
-
-# v2.34 PGO: sln must not link libgcov
-$(objpfx)sln: LDFLAGS := $(filter-out -fprofile-generate% -fprofile-arcs%,$(LDFLAGS))
-EOF
+    # v2.35 PGO：static helper 組內 -lgcov 由上方 pass1 區塊統一對
+    # ../build32/Makeconfig 處理，這裡不再對 sln 單點覆寫 LDFLAGS。
     rm -rf build; mkdir -pv build
     cd build
     CC="gcc -m32" CXX="g++ -m32"             \
