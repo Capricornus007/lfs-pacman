@@ -74,18 +74,29 @@ build() {
     #   makepkg 是純 DESTDIR 構建，收斂為 package() 一次 DESTDIR install；
     #   include-fixed 清理動的是系統 gcc 目錄（非包內容），放 .install scriptlet。
     cd ${pkgname}-${pkgver}
-    # ── v2.29 外層 PGO：ld.so 組件免插樁（run 43635076806 實測定案）─────────
+    # ── v2.31 外層 PGO：ld.so 組件免插樁（run 43635076806／43647768840 實測定案）──
     # ld.so 以 -nostdlib -nostartfiles 鏈接且沒有 gcov dump 機制（插樁了也
     # 採不到 .gcda）；插樁對象會把 libgcov 拉進鏈接，其 profiler 引用
     # malloc/free/calloc/__memcpy_chk/__pthread_mutex_lock/newlocale 等
     # ld.so 裡不存在的符號 → 數百個 undefined reference，pass1 直接炸。
-    # 官方擴展點：rtld-CFLAGS（rtld-Rules 對所有 rtld-*.os 最後追加）+
-    # elf/Makefile 追加（覆蓋 elf 自身的 dl-*.os 與 ld.so 最終鏈接的
-    # LDFLAGS——LTO 下鏈接期旗標會被 lto1 重編譯吃進去，必須同時壓掉）。
+    # 官方擴展點有二，都走檔尾追加、絕不走 make 命令列：
+    #   1. elf/rtld-Rules 檔尾 `rtld-CFLAGS +=`——覆蓋全部 rtld-*.os。
+    #      v2.29 曾用 make rtld-CFLAGS=... 命令列傳遞，結果命令列變數經
+    #      MAKEFLAGS 傳入 worker 後，把 rtld-Rules worker 分支的官方
+    #      `rtld-CFLAGS += $(no-stack-protector) $(no-fortify-source)`
+    #      整個壓掉（GNU make 命令列變數優先於 makefile 賦值），rtld
+    #      組件帶上 -fstack-protector-strong → ld.so 鏈接數百個
+    #      undefined reference to __stack_chk_fail（run 43647768840）。
+    #      檔尾追加在官方 += 之後，兩值並存，才是正確姿勢。
+    #   2. elf/Makefile `override CFLAGS +=`＋`LDFLAGS +=`——覆蓋 elf 自身
+    #      非 rtld 規則的物件與 ld.so 最終鏈接（LTO 下鏈接期旗標會被
+    #      lto1 重編譯吃進去，必須同時壓掉）。
     # libc.so.6 / libm 等主體不受影響，全量插樁 → 主體被 PGO 優化。
     _pgo_rtld_noinstr="-fno-profile-generate -fno-profile-arcs"
-    printf '\n# v2.29 PGO: ld.so components must not be instrumented\noverride CFLAGS += %s\nLDFLAGS += %s\n' \
+    printf '\n# v2.31 PGO: ld.so components must not be instrumented\noverride CFLAGS += %s\nLDFLAGS += %s\n' \
         "$_pgo_rtld_noinstr" "$_pgo_rtld_noinstr" >> elf/Makefile
+    printf '\n# v2.31 PGO: rtld components must not be instrumented (keep official no-stack-protector)\nrtld-CFLAGS += %s\n' \
+        "$_pgo_rtld_noinstr" >> elf/rtld-Rules
     rm -rf build; mkdir -pv build
     cd build
     ../configure --prefix=/usr                   \
@@ -95,11 +106,13 @@ build() {
                  libc_cv_slibdir=/usr/lib        \
                  --enable-stack-protector=strong \
                  --enable-kernel=5.10
-    make rtld-CFLAGS="$_pgo_rtld_noinstr"
+    make
     cd ../../build32
     # 32 位（書 8.5.2 configure 原文）
-    printf '\n# v2.29 PGO: ld.so components must not be instrumented\noverride CFLAGS += %s\nLDFLAGS += %s\n' \
+    printf '\n# v2.31 PGO: ld.so components must not be instrumented\noverride CFLAGS += %s\nLDFLAGS += %s\n' \
         "$_pgo_rtld_noinstr" "$_pgo_rtld_noinstr" >> elf/Makefile
+    printf '\n# v2.31 PGO: rtld components must not be instrumented (keep official no-stack-protector)\nrtld-CFLAGS += %s\n' \
+        "$_pgo_rtld_noinstr" >> elf/rtld-Rules
     rm -rf build; mkdir -pv build
     cd build
     CC="gcc -m32" CXX="g++ -m32"             \
@@ -115,7 +128,7 @@ build() {
           libc_cv_slibdir=/usr/lib32         \
           --enable-stack-protector=strong    \
           --enable-kernel=5.10
-    make rtld-CFLAGS="$_pgo_rtld_noinstr"
+    make
 }
 
 check() {
