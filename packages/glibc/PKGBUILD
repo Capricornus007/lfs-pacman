@@ -94,9 +94,30 @@ build() {
     # libc.so.6 / libm 等主體不受影響，全量插樁 → 主體被 PGO 優化。
     _pgo_rtld_noinstr="-fno-profile-generate -fno-profile-arcs"
     printf '\n# v2.31 PGO: ld.so components must not be instrumented\noverride CFLAGS += %s\nLDFLAGS += %s\n' \
-        "$_pgo_rtld_noinstr" "$_pgo_rtld_noinstr" >> elf/Makefile
+        "$_pgo_rtld_noinstr"         "$_pgo_rtld_noinstr" >> elf/Makefile
     printf '\n# v2.31 PGO: rtld components must not be instrumented (keep official no-stack-protector)\nrtld-CFLAGS += %s\n' \
         "$_pgo_rtld_noinstr" >> elf/rtld-Rules
+    # ── v2.32 PGO：pass1 鏈接保留 ld.so／libgcc_s（run 43672200830 實測）──
+    # LDFLAGS 的 -fprofile-generate 使 gcc 在鏈接末尾拉入 libgcov.a，其
+    # profiler 引用 __tls_get_addr@@GLIBC_2.3——構建樹 libc.so.6 不導出
+    # 該符號，只有 ld.so 導出。但 Makeconfig 的 link-libc-between-gnulib
+    # 把 ld.so 包在 `-Wl,--as-needed … -Wl,--no-as-needed` 裡，而 GNU ld
+    # 對 as-needed DSO 只統計「排在此 DSO 之前」的未定義引用——libgcov
+    # 排在後面，引用不算數，ld.so 被丟棄 → iconv/iconvconfig 鏈接報
+    # "DSO missing from command line"。libgcc_eh 對 libgcc_s 的同款包裹
+    # 有同樣的位置陷阱，一併拆掉（殘留的 -Wl,--no-as-needed 是預設值，
+    # 無害）。僅 pass1 生效：pass2（-fprofile-use）不拉 libgcov，包裹
+    # 原樣保留，安裝產物零改動。
+    if [[ "$LDFLAGS" == *-fprofile-generate* ]]; then
+        for _mc in Makeconfig ../build32/Makeconfig; do
+            sed -i 's|-Wl,--as-needed \$(elf-objpfx)ld\.so|$(elf-objpfx)ld.so|' "$_mc"
+            sed -i 's|libgcc_eh := -Wl,--as-needed \$(libgcc_s)|libgcc_eh := $(libgcc_s)|' "$_mc"
+            if grep -q -- '-Wl,--as-needed \$(elf-objpfx)ld\.so\|libgcc_eh := -Wl,--as-needed' "$_mc"; then
+                echo "::error::v2.32 sed 未命中 $_mc（lto 補丁可能改了 Makeconfig）" >&2
+                exit 1
+            fi
+        done
+    fi
     rm -rf build; mkdir -pv build
     cd build
     ../configure --prefix=/usr                   \
