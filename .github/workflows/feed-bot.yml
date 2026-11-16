@@ -15,6 +15,12 @@ on:
 permissions:
   contents: write
 
+# 同一時刻只跑一輪：排程與 push/dispatch 重疊時取消舊的，
+# 避免 91 包 LFS 全量重建跑兩遍、發佈端互相覆蓋（2026-11-16 實錘：兩輪並行到 openssl 65/91）。
+concurrency:
+  group: feed-bot
+  cancel-in-progress: true
+
 jobs:
   # ── 1. 掃描上游 → 動態產生 per-package matrix ───────────────────────
   prepare:
