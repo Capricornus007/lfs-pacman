@@ -129,6 +129,25 @@ build() {
     # 無害）。僅 pass1 生效：pass2（-fprofile-use）不拉 libgcov，包裹
     # 原樣保留，安裝產物零改動。
     if [[ "$LDFLAGS" == *-fprofile-generate* ]]; then
+        # ── v2.37：pass1 插樁改回非原子計數 ──
+        # ci/build-recipe.sh 給所有 PGO 包注入 `-fprofile-update=atomic`，
+        # 它讓 libgcov 的計數器變成 8 位元組原子遞增。32 位元 x86 沒有原生的
+        # 64 位元原子加，libgcov.a 因此引用 libatomic 的 `__atomic_fetch_add_8`。
+        # v2.36 曾想把 -latomic 塞進 static group，但這次失敗的是 libc.so 自己的
+        # 連結（Makerules 的 lib%.so 規則，走 build-shlib 而非 link-libc-static）：
+        #   gcc -m32 ... -shared -static-libgcc -o .../libc.so ...
+        #   undefined reference to `__atomic_fetch_add_8'
+        # 而 libc.so 一旦 DT_NEEDED libatomic.so.1 就是自舉死結（libatomic 自己
+        # 依賴 libc）。正解不是加庫，是讓插樁不產生 64 位元原子操作：
+        # 同一 GCC 後出現的 -fprofile-update 覆蓋前面的值，所以追加 single 即可。
+        # 代價：多執行緒訓練時計數器可能少量競爭丟數，對 PGO 覆蓋度影響可忽略
+        # （LFS 書的 glibc PGO 本來就用預設 single）。
+        CFLAGS="${CFLAGS} -fprofile-update=single"
+        CXXFLAGS="${CXXFLAGS} -fprofile-update=single"
+        LDFLAGS="${LDFLAGS} -fprofile-update=single"
+        export CFLAGS CXXFLAGS LDFLAGS
+        echo "v2.37: pass1 插樁改 -fprofile-update=single（避免 libc.so 依賴 libatomic）"
+
         for _mc in Makeconfig ../build32/Makeconfig; do
             sed -i 's|-Wl,--as-needed \$(elf-objpfx)ld\.so|$(elf-objpfx)ld.so|' "$_mc"
             sed -i 's|libgcc_eh := -Wl,--as-needed \$(libgcc_s)|libgcc_eh := $(libgcc_s)|' "$_mc"
