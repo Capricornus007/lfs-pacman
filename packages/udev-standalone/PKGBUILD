@@ -50,17 +50,7 @@ package() {
     fi
     make DESTDIR="$pkgdir" install
 
-    # 32-bit libudev（multilib；/usr/lib32 存在時）
-    if [ -d /usr/lib32 ]; then
-        CC="gcc -m32" CXX="g++ -m32" ./configure --prefix=/usr \
-            --sysconfdir=/etc --libdir=/usr/lib32 --disable-systemd-hwdb >/dev/null
-        # 頂層 make（不能用 make -C src/libudev：shared/libudev_shared.la 依賴會斷）
-        make -j4 >/dev/null
-        install -dm755 "$pkgdir/usr/lib32/pkgconfig"
-        install -m755 src/libudev/.libs/libudev.so.1.* "$pkgdir/usr/lib32/"
-        ln -sf "$(basename "$pkgdir"/usr/lib32/libudev.so.1.*)" "$pkgdir/usr/lib32/libudev.so.1"
-        ln -sf libudev.so.1 "$pkgdir/usr/lib32/libudev.so"
-    fi
+    # 32-bit libudev 由 feed-bot multilib 配套處理（此處手動 -m32 會與 PGO LTO object 衝突）
 
     # 零 systemd 殘留閘門：檔名與文字都不得出現（版權 forked-from 已在上游改寫）
     if find "$pkgdir" -iname '*systemd*' | grep -q .; then
