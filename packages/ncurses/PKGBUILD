@@ -14,6 +14,15 @@ source=(${pkgname}-${pkgver}.tar.gz)
 md5sums=('dd45bf6854430af403452a7a6a40652c')
 
 prepare() {
+    # makepkg/bsdtar 剝掉與 tarball 同名的頂層目錄時，重建 ${pkgname}-${pkgver} 結構
+    if [ ! -d "${pkgname}-${pkgver}" ]; then
+        mkdir -p "${pkgname}-${pkgver}"
+        for f in "${srcdir}"/*; do
+            b=$(basename "$f")
+            case "$b" in ${pkgname}-${pkgver}|abi5|build32|*.tar.gz|*.patch|*.diff) continue;; esac
+            mv "$f" "${pkgname}-${pkgver}/"
+        done
+    fi
     rm -rf abi5 build32; cp -a ${pkgname}-${pkgver} abi5
     cp -a ${pkgname}-${pkgver} build32
 }
