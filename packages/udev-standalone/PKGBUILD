@@ -52,10 +52,10 @@ package() {
 
     # 32-bit libudev（multilib；/usr/lib32 存在時）
     if [ -d /usr/lib32 ]; then
-        make clean >/dev/null 2>&1 || true
-        CC="gcc -m32" ./configure --prefix=/usr --sysconfdir=/etc \
-            --libdir=/usr/lib32 >/dev/null
-        make -C src/libudev -j4 >/dev/null
+        CC="gcc -m32" CXX="g++ -m32" ./configure --prefix=/usr \
+            --sysconfdir=/etc --libdir=/usr/lib32 --disable-systemd-hwdb >/dev/null
+        # 頂層 make（不能用 make -C src/libudev：shared/libudev_shared.la 依賴會斷）
+        make -j4 >/dev/null
         install -dm755 "$pkgdir/usr/lib32/pkgconfig"
         install -m755 src/libudev/.libs/libudev.so.1.* "$pkgdir/usr/lib32/"
         ln -sf "$(basename "$pkgdir"/usr/lib32/libudev.so.1.*)" "$pkgdir/usr/lib32/libudev.so.1"
