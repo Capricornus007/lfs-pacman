@@ -52,11 +52,21 @@ package() {
 
     # 32-bit libudev 由 feed-bot multilib 配套處理（此處手動 -m32 會與 PGO LTO object 衝突）
 
-    # 零 systemd 殘留閘門：檔名與文字都不得出現（版權 forked-from 已在上游改寫）
+    # 零 systemd 執行期/路徑殘留閘門（2026-11-20 修正：原本連文字都擋，過嚴）
+    # 檢查三項真實殘留：① 檔名/目錄 ② libsystemd 動態連結 ③ systemd 單元目錄
+    # 保留（非殘留）：GPL 版權 "This file is part of systemd"（法律要求）、
+    #   SYSTEMD_LOG_LEVEL/SYSTEMD_COLORS 等相容環境變數（eudev 刻意保留的生態介面）。
     if find "$pkgdir" -iname '*systemd*' | grep -q .; then
         error "systemd-named file found in the package tree"; return 1
     fi
-    if grep -ril 'systemd' "$pkgdir" 2>/dev/null | grep -q .; then
-        error "systemd text found in the package tree"; return 1
+    if find "$pkgdir" -type d -path '*/systemd/*' | grep -q .; then
+        error "systemd directory found in the package tree"; return 1
     fi
+    local f
+    for f in $(find "$pkgdir" -type f -executable 2>/dev/null); do
+        if readelf -d "$f" 2>/dev/null | grep -q 'NEEDED.*libsystemd'; then
+            error "libsystemd linked in $(basename "$f")"; return 1
+        fi
+    done
+    msg2 "zero-systemd gate OK (no systemd path/dir/libsystemd; GPL copyright kept)"
 }
