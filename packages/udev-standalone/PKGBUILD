@@ -13,11 +13,11 @@ provides=('udev' 'libudev' 'libudev.so=1-64' 'libudev.so=1-32')
 conflicts=('udev')
 replaces=('udev')
 depends=('glibc' 'libkmod' 'util-linux-libs')
-makedepends=('gcc' 'make' 'gperf' 'pkgconf')
+makedepends=('gcc' 'make' 'gperf' 'pkgconf' 'autoconf' 'automake' 'libtool')
 install=udev-standalone.install
 backup=('etc/udev/udev.conf' 'etc/udev/hwdb.d/README')
 source=("udev-standalone-${pkgver}.tar.gz")
-sha256sums=('8d8ca029dcf2c928c3f252a70a8279a853aab5c33e6d3273097e6971f80373d9')
+sha256sums=('01404f5397529287abb8741f4bbd6214e0b0a49682a126f4f81af41e37455618')
 
 prepare() {
     cd "${srcdir}/udev-standalone-${pkgver}"
