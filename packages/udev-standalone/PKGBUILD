@@ -37,7 +37,7 @@ build() {
         cd "${srcdir}"
     fi
     ./configure --prefix=/usr --sysconfdir=/etc --libdir=/usr/lib \
-                --sbindir=/usr/bin
+                --sbindir=/usr/bin --disable-systemd-hwdb
     make -j4
 }
 
