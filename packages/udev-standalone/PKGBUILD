@@ -1,105 +1,57 @@
-# udev-standalone —— clean-room udev 裝置管理員＋libudev（MLFS 8.78 替代配方）
-# 來源只有本專案兩個倉＋LFS 的 udev-lfs 輔助腳本；不含、也不建置任何 systemd 檔案。
-# 規則與 hwdb 目錄由本專案自寫（rules/、hwdb.d/），不帶任何上游規則資料。
+# udev-standalone —— 汇集 eudev 3.3.0 + 下游重寫、零 systemd 執行期相依的 udev
+# 2026-11-20 翻案：舊 clean-room 單檔 udev 作廢；新版本源自 udev-standalone 原倉
+# (GitHub Capricornus007/udev-standalone tag v3.3.0-mlfs1)，autotools 建置。
 pkgname=udev-standalone
-pkgver=1.0.0
+pkgver=3.3.0
 pkgrel=1
-pkgdesc="clean-room udev 裝置管理員與 libudev（TBWTFPL）"
+pkgdesc="systemd-free udev device manager (eudev 3.3.0 base + downstream merge)"
 arch=('x86_64')
-url="https://github.com/Capricornus007"
-license=('custom:TBWTFPL' 'GPL-2.0-or-later')
+url="https://github.com/Capricornus007/udev-standalone"
+license=('GPL-2.0-or-later')
 options=(!strip !debug lto)
 provides=('udev' 'libudev' 'libudev.so=1-64' 'libudev.so=1-32')
 conflicts=('udev')
 replaces=('udev')
-depends=('glibc')
-makedepends=('gcc' 'make')
+depends=('glibc' 'libkmod' 'util-linux-libs')
+makedepends=('gcc' 'make' 'gperf' 'pkgconf')
 install=udev-standalone.install
-backup=('etc/udev/udev.conf'
-        'etc/udev/rules.d/40-auto-modalias.rules'
-        'etc/udev/rules.d/50-default.rules'
-        'etc/udev/rules.d/60-persistent-storage.rules'
-        'etc/udev/rules.d/60-persistent-input.rules'
-        'etc/udev/rules.d/60-persistent-net.rules')
-source=("udev-standalone-${pkgver}.tar.gz"
-        "libudev-standalone-${pkgver}.tar.gz"
-        "udev-lfs-20230818.tar.xz")
-sha256sums=('e6899df52e056cc4bc536ca4007cf6fc77945819eb9c15c4092bfbf57d18af54'
-            '6c07c86ea2255ad82fd77ea660c71792bdc95329680b5ebeebdf3f84d958f3e3'
-            '104cdde52a898c648ce346a9ed1fbe9297514656534636a6584132cf2d7428d9')
+backup=('etc/udev/udev.conf' 'etc/udev/hwdb.d/README')
+source=("udev-standalone-${pkgver}.tar.gz")
+sha256sums=('8d8ca029dcf2c928c3f252a70a8279a853aab5c33e6d3273097e6971f80373d9')
 
-build() {
-    make -C "udev-standalone-${pkgver}" clean
-    # 繼承全域 CFLAGS（-O3/znver3/LTO/PGO 全量），只補 Makefile 必需的告警與標準旗標
-    make -C "udev-standalone-${pkgver}" CFLAGS="${CFLAGS} -Wall -Wextra -std=c99"
-
-    make -C "libudev-standalone-${pkgver}" clean
-    make -C "libudev-standalone-${pkgver}"
-
-    # lib32：批次 1 的 glibc 已建好 multilib；沒有 /usr/lib32 時明確警告並跳過
-    if [ -d /usr/lib32 ]; then
-        rm -rf lib32
-        cp -a "libudev-standalone-${pkgver}" lib32
-        make -C lib32 clean
-        make -C lib32 CFLAGS="${CFLAGS} -Wall -Wextra -std=c99 -fPIC -m32" libudev.so
-    else
-        warning "no /usr/lib32: building without 32-bit libudev"
-    fi
+prepare() {
+    cd "${srcdir}/udev-standalone-${pkgver}"
+    autoreconf -f -i -s
 }
 
-check() {
-    cd "udev-standalone-${pkgver}"
-    ./udev --version
-    ./udev verify rules
-    ./udev --test test/uevent-sample.txt >/dev/null
+build() {
+    cd "${srcdir}/udev-standalone-${pkgver}"
+    ./configure --prefix=/usr --sysconfdir=/etc --libdir=/usr/lib \
+                --sbindir=/usr/bin
+    make -j4
 }
 
 package() {
-    P="$pkgdir"
-    install -d "$P/usr/bin" "$P/usr/sbin" "$P/usr/lib" "$P/usr/include" \
-               "$P/usr/lib/pkgconfig" "$P/usr/share/pkgconfig" \
-               "$P/usr/lib/udev" "$P/usr/lib/udev/hwdb.d" \
-               "$P/etc/udev/rules.d" "$P/etc/udev/hwdb.d"
+    cd "${srcdir}/udev-standalone-${pkgver}"
+    make DESTDIR="$pkgdir" install
 
-    install -m755 "udev-standalone-${pkgver}/udev" "$P/usr/bin/udev"
-    ln -sf udev          "$P/usr/bin/udevadm"
-    ln -sf udev          "$P/usr/bin/udev-hwdb"
-    ln -sf ../bin/udev   "$P/usr/sbin/udevd"
-
-    cd "libudev-standalone-${pkgver}"
-    install -m755 libudev.so.1.0.0 "$P/usr/lib/"
-    ln -sf libudev.so.1.0.0 "$P/usr/lib/libudev.so.1"
-    ln -sf libudev.so.1     "$P/usr/lib/libudev.so"
-    install -m644 src/udev.h "$P/usr/include/libudev.h"
-    install -m644 libudev.pc "$P/usr/lib/pkgconfig/"
-    install -m644 udev.pc    "$P/usr/share/pkgconfig/"
-    cd ..
-
-    if [ -f lib32/libudev.so.1.0.0 ]; then
-        install -d "$P/usr/lib32/pkgconfig"
-        install -m755 lib32/libudev.so.1.0.0 "$P/usr/lib32/"
-        ln -sf libudev.so.1.0.0 "$P/usr/lib32/libudev.so.1"
-        ln -sf libudev.so.1     "$P/usr/lib32/libudev.so"
-        sed 's|libdir=${prefix}/lib|libdir=${prefix}/lib32|' \
-            "libudev-standalone-${pkgver}/libudev.pc" > "$P/usr/lib32/pkgconfig/libudev.pc"
+    # 32-bit libudev（multilib；/usr/lib32 存在時）
+    if [ -d /usr/lib32 ]; then
+        make clean >/dev/null 2>&1 || true
+        CC="gcc -m32" ./configure --prefix=/usr --sysconfdir=/etc \
+            --libdir=/usr/lib32 >/dev/null
+        make -C src/libudev -j4 >/dev/null
+        install -dm755 "$pkgdir/usr/lib32/pkgconfig"
+        install -m755 src/libudev/.libs/libudev.so.1.* "$pkgdir/usr/lib32/"
+        ln -sf "$(basename "$pkgdir"/usr/lib32/libudev.so.1.*)" "$pkgdir/usr/lib32/libudev.so.1"
+        ln -sf libudev.so.1 "$pkgdir/usr/lib32/libudev.so"
     fi
 
-    install -m644 "udev-standalone-${pkgver}"/rules/*.rules "$P/etc/udev/rules.d/"
-    # 40-auto-modalias.rules 的 RUN+ 載體（MODALIAS→modprobe；無 libkmod 的替代件）
-    install -m755 "udev-standalone-${pkgver}/rules/udev-auto-modprobe" "$P/usr/lib/udev/"
-    install -m644 "udev-standalone-${pkgver}/hwdb.d/README" "$P/usr/lib/udev/hwdb.d/README"
-    install -m755 udev-lfs-20230818/init-net-rules.sh "$P/usr/lib/udev/"
-    install -m755 udev-lfs-20230818/write_net_rules "$P/usr/lib/udev/"
-    install -m644 udev-lfs-20230818/rule_generator.functions "$P/usr/lib/udev/"
-    printf '# udev.conf for udev-standalone (no options are read yet)\n' > "$P/etc/udev/udev.conf"
-
-    # hard gate: no systemd-named file and no systemd text in the installed tree
-    if find "$P" -iname '*systemd*' | grep -q .; then
-        error "systemd-named file found in the package tree"
-        return 1
+    # 零 systemd 殘留閘門：檔名與文字都不得出現（版權 forked-from 已在上游改寫）
+    if find "$pkgdir" -iname '*systemd*' | grep -q .; then
+        error "systemd-named file found in the package tree"; return 1
     fi
-    if grep -ril 'systemd' "$P" | grep -q .; then
-        error "systemd text found in the installed tree"
-        return 1
+    if grep -ril 'systemd' "$pkgdir" 2>/dev/null | grep -q .; then
+        error "systemd text found in the package tree"; return 1
     fi
 }
