@@ -1,0 +1,39 @@
+# MLFS BLFS opendoas 6.8.2 —— 提權工具（取代 sudo，使用者指令）
+pkgname=opendoas
+pkgver=6.8.2
+pkgrel=1
+pkgdesc="Lightweight sudo alternative (doas), no systemd, MLFS standard privilege tool"
+arch=('x86_64')
+url="https://github.com/Duncaen/OpenDoas"
+license=('ISC')
+options=(!strip !debug lto)
+depends=('glibc')
+source=(opendoas-6.8.2.tar.gz)
+md5sums=('354067fc21f59b0b9ff9ee37e605d354')
+
+prepare() {
+    if [ -d "${srcdir}/opendoas-${pkgver}" ]; then
+        cd "${srcdir}/opendoas-${pkgver}"
+    else
+        cd "${srcdir}"
+    fi
+}
+
+build() {
+    if [ -d "${srcdir}/opendoas-${pkgver}" ]; then
+        cd "${srcdir}/opendoas-${pkgver}"
+    else
+        cd "${srcdir}"
+    fi
+    ./configure --prefix=/usr --sysconfdir=/etc --mandir=/usr/share/man
+    make -j4
+}
+
+package() {
+    if [ -d "${srcdir}/opendoas-${pkgver}" ]; then
+        cd "${srcdir}/opendoas-${pkgver}"
+    else
+        cd "${srcdir}"
+    fi
+    make DESTDIR="$pkgdir" install
+}

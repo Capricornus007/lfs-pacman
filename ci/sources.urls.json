@@ -100,5 +100,6 @@
  "meson-1.9.1.tar.gz": "https://github.com/mesonbuild/meson/releases/download/1.9.1/meson-1.9.1.tar.gz",
  "ninja-1.13.1.tar.gz": "https://github.com/ninja-build/ninja/archive/v1.13.1/ninja-1.13.1.tar.gz",
  "openssl-4.0.0.tar.gz": "https://github.com/openssl/openssl/releases/download/openssl-4.0.0/openssl-4.0.0.tar.gz",
- "udev-standalone-3.3.0.tar.gz": "https://github.com/Capricornus007/udev-standalone/archive/refs/tags/v3.3.0-mlfs1.tar.gz"
+ "udev-standalone-3.3.0.tar.gz": "https://github.com/Capricornus007/udev-standalone/archive/refs/tags/v3.3.0-mlfs1.tar.gz",
+ "opendoas-6.8.2.tar.gz": "https://github.com/Duncaen/OpenDoas/archive/refs/tags/v6.8.2.tar.gz"
 }
