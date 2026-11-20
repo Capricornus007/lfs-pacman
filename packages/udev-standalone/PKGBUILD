@@ -20,19 +20,34 @@ source=("udev-standalone-${pkgver}.tar.gz")
 sha256sums=('01404f5397529287abb8741f4bbd6214e0b0a49682a126f4f81af41e37455618')
 
 prepare() {
-    cd "${srcdir}/udev-standalone-${pkgver}"
+    # makepkg 用 bsdtar 解包：若 tarball 頂層與檔名同名會被剝掉，退回 srcdir 根
+    if [ -d "${srcdir}/udev-standalone-${pkgver}" ]; then
+        cd "${srcdir}/udev-standalone-${pkgver}"
+    else
+        cd "${srcdir}"
+    fi
     autoreconf -f -i -s
 }
 
 build() {
-    cd "${srcdir}/udev-standalone-${pkgver}"
+    # makepkg 用 bsdtar 解包：若 tarball 頂層與檔名同名會被剝掉，退回 srcdir 根
+    if [ -d "${srcdir}/udev-standalone-${pkgver}" ]; then
+        cd "${srcdir}/udev-standalone-${pkgver}"
+    else
+        cd "${srcdir}"
+    fi
     ./configure --prefix=/usr --sysconfdir=/etc --libdir=/usr/lib \
                 --sbindir=/usr/bin
     make -j4
 }
 
 package() {
-    cd "${srcdir}/udev-standalone-${pkgver}"
+    # makepkg 用 bsdtar 解包：若 tarball 頂層與檔名同名會被剝掉，退回 srcdir 根
+    if [ -d "${srcdir}/udev-standalone-${pkgver}" ]; then
+        cd "${srcdir}/udev-standalone-${pkgver}"
+    else
+        cd "${srcdir}"
+    fi
     make DESTDIR="$pkgdir" install
 
     # 32-bit libudev（multilib；/usr/lib32 存在時）
