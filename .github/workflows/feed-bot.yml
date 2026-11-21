@@ -234,14 +234,21 @@ jobs:
         run: |
           mkdir -p feed
           ( cd feed && repo-add mlfs-core.db.tar.zst *.pkg.tar.zst )
+          # pacman always requests <repo>.db, while repo-add names the archive
+          # <repo>.db.tar.zst. Publish an explicit alias for both databases.
+          cp --remove-destination -f feed/mlfs-core.db.tar.zst feed/mlfs-core.db
+          [ -f feed/mlfs-core.files.tar.zst ] && \
+            cp --remove-destination -f feed/mlfs-core.files.tar.zst feed/mlfs-core.files || true
           sha256sum feed/*.pkg.tar.zst > feed/SHA256SUMS
           # release 不一定已存在；只 upload 會 404（2026-11-08 實錘：0 個 release）
           gh release view current-mlfs-repo >/dev/null 2>&1 || \
             gh release create current-mlfs-repo --title 'MLFS core feed' \
               --notes 'feed-bot 自動發佈（mlfs-core）' --latest=false
           gh release upload current-mlfs-repo \
-            feed/mlfs-core.db.tar.zst feed/*.pkg.tar.zst feed/SHA256SUMS --clobber
-          gh release upload current-mlfs-repo feed/mlfs-core.files.tar.zst --clobber 2>/dev/null || true
+            feed/mlfs-core.db feed/mlfs-core.db.tar.zst \
+            feed/*.pkg.tar.zst feed/SHA256SUMS --clobber
+          gh release upload current-mlfs-repo \
+            feed/mlfs-core.files feed/mlfs-core.files.tar.zst --clobber 2>/dev/null || true
 
   # ── 4. 總表：不管成功失敗都產出，保留原本的 job summary ──────────────
   summary:
