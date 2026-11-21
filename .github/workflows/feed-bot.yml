@@ -245,10 +245,8 @@ jobs:
             gh release create current-mlfs-repo --title 'MLFS core feed' \
               --notes 'feed-bot 自動發佈（mlfs-core）' --latest=false
           gh release upload current-mlfs-repo \
-            feed/mlfs-core.db feed/mlfs-core.db.tar.zst \
-            feed/*.pkg.tar.zst feed/SHA256SUMS --clobber
-          gh release upload current-mlfs-repo \
-            feed/mlfs-core.files feed/mlfs-core.files.tar.zst --clobber 2>/dev/null || true
+            feed/mlfs-core.db feed/*.pkg.tar.zst feed/SHA256SUMS --clobber
+          gh release upload current-mlfs-repo feed/mlfs-core.files --clobber 2>/dev/null || true
 
   # ── 4. 總表：不管成功失敗都產出，保留原本的 job summary ──────────────
   summary:
