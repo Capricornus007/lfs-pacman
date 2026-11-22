@@ -77,14 +77,24 @@ jobs:
             printf '\n[lib32]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
           # 宿主工具：PEP 517 後端（7 個 Python 配方 --no-build-isolation）、
           # multilib 32 位連結庫、libpipeline（man-db）、re2c（ninja）。
-          pacman -Syu --noconfirm --needed \
-            base-devel git curl jq python python-pip \
-            python-flit-core python-setuptools python-wheel python-build python-installer \
-            meson ninja tcl rsync pacman-contrib libpipeline re2c \
-            bison gawk perl texinfo gettext gperf pkgconf \
-            lib32-glibc lib32-gcc-libs lib32-zlib lib32-zstd lib32-xz \
-            lib32-ncurses lib32-pcre2 lib32-readline lib32-util-linux \
-            lib32-bzip2 lib32-openssl github-cli
+          # 重試 4 次：CDN 抖動（feed-bot #93 libffi 實測：mirrors.dotsrc.org
+          # 「Operation too slow」+ ftp.ntua.gr 404 → 整個 job 紅）不能判死。
+          _ok=false
+          for _try in 1 2 3 4; do
+            if pacman -Syu --noconfirm --needed \
+              base-devel git curl jq python python-pip \
+              python-flit-core python-setuptools python-wheel python-build python-installer \
+              meson ninja tcl rsync pacman-contrib libpipeline re2c \
+              bison gawk perl texinfo gettext gperf pkgconf \
+              lib32-glibc lib32-gcc-libs lib32-zlib lib32-zstd lib32-xz \
+              lib32-ncurses lib32-pcre2 lib32-readline lib32-util-linux \
+              lib32-bzip2 lib32-openssl github-cli; then
+              _ok=true; break
+            fi
+            echo "::warning::pacman -Syu 第 ${_try} 次失敗（鏡像抖動？），30 秒後重試"
+            sleep 30
+          done
+          [ "$_ok" = true ] || { echo "::error::pacman -Syu 連續 4 次失敗"; exit 1; }
           useradd -m builder
       # checkout 需要容器內有 git，所以排在系統準備之後。
       - uses: actions/checkout@v7

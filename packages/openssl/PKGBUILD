@@ -30,23 +30,30 @@ prepare() {
 build() {
     cd ${pkgname}-${pkgver}
     # 書 8.50 pre 1–2
+    # make build_sw：只編軟體本體（libcrypto/libssl/apps），跳過 fuzz/test 測試
+    # 二進制。CI 兩遍 makepkg 都是 --nocheck（build-recipe.sh），測試二進制編了
+    # 從沒跑過；PGO 兩段式下 openssl 要編 4 遍（64+32 × 插樁+正式），全量 make
+    # 直接爆 GitHub 6h job 上限（feed-bot #93 實測：被殺時還在編 32 位 fuzz）。
+    # 訓練 profile 由 pgo-train.sh 的 make check（限時）+ 冒煙補齊。
     ./config --prefix=/usr         \
              --openssldir=/etc/ssl \
              --libdir=lib          \
              shared                \
              zlib-dynamic
-    make
+    make build_sw
 
     cd ../build32
     # 書 8.50 pre 8–9（linux-x86 目標＋no-docs，只取 lib32）
+    # no-tests：32 位樹只裝 lib32 庫，測試二進制不需要。
     ./config --prefix=/usr         \
              --openssldir=/etc/ssl \
              --libdir=lib32        \
              shared                \
              zlib-dynamic          \
              no-docs               \
+             no-tests              \
              linux-x86
-    make
+    make build_sw
 }
 
 check() {
