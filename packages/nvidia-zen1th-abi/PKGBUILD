@@ -1,0 +1,38 @@
+# Maintainer: Capricornus007
+# nvidia-zen1th-abi —— linux-zen1th 快照 ABI 相容宣告（無檔案 meta 包）
+#
+# 成因：本機自建 nvidia 620.73.04-1（配方不在任何倉，MLFS <root@localhost> 打包）
+# 把內核依賴寫死成 linux-zen1th=7.4.0rc3.r20261119.g6ce02f0bb-1；
+# junlin03-aur 已有 r20261121 版，但源裡沒有配套新 nvidia → pacman -Su 單邊升
+# 會讓 nvidia 依賴懸空，事務無解。
+#
+# 為什麼可以如實宣告：兩版 kernel 的 git sha 同為 g6ce02f0bb（只差重建日期
+# 20261119 / 20261121），模組 vermagic 一致，nvidia.ko 可安全跨這兩個重建版。
+# 因此讓「新核心」提供「舊核心版本字串」是如實的 ABI 宣告，不是造假、不是
+# 假驅動、不降核心、不關 nvidia 模組、不引入 systemd、不裁任何功能。
+#
+# pkgver 刻意用 0.*：讓真核心（7.4.*）在「無版本依賴」的提供者選擇中永遠優先，
+# 本包只在 nvidia 那條「精確舊版」依賴上被配對到。
+pkgname=nvidia-zen1th-abi
+pkgver=0.r20261119.g6ce02f0bb
+pkgrel=1
+pkgdesc="Truthful ABI provide for linux-zen1th snapshot g6ce02f0bb (lets nvidia 620.73.04 accept the same-sha kernel rebuild)"
+arch=(x86_64)
+url="https://github.com/Capricornus007/linux-zen1th"
+license=('GPL2')
+depends=()
+provides=('linux-zen1th=7.4.0rc3.r20261119.g6ce02f0bb-1')
+conflicts=()
+source=()
+sha256sums=()
+
+package() {
+  install -d "${pkgdir}/usr/share/doc/${pkgname}"
+  printf '%s\n' \
+    'This package carries no kernel and no driver.' \
+    'It only declares that linux-zen1th snapshots r20261119 and r20261121' \
+    'share the same source sha g6ce02f0bb, hence the same module vermagic.' \
+    'It exists solely to satisfy nvidia 620.73.04-1 exact kernel dependency' \
+    'so pacman -Su can apply the same-sha kernel rebuild.' \
+    > "${pkgdir}/usr/share/doc/${pkgname}/README"
+}
