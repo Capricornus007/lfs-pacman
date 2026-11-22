@@ -9,6 +9,10 @@ license=('custom:PublicDomain')
 options=(!strip !debug lto)
 # 依賴附錄 RUN=Glibc
 depends=('glibc')
+# 與 Arch core/sqlite 同上游、同 ABI（SONAME 實測 libsqlite3.so.0）的如實宣告：
+# 補回 daemon 側（doxygen-git）依賴的 libsqlite3.so=0-64 與裸名 sqlite3=3.54.1，
+# 讓 mlfs-core 的 3540100-1 能頂替 Arch 的 3.54.1-1 而不讓下游依賴懸空。
+provides=('sqlite3=3.54.1' 'libsqlite3.so=0-64')
 source=(sqlite-autoconf-${pkgver}.tar.gz
         sqlite-doc-${pkgver}.zip)
 noextract=(sqlite-doc-${pkgver}.zip)
