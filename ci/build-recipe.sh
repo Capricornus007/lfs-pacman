@@ -64,7 +64,8 @@ chown -R builder . 2>/dev/null || true
 #   pass2  清樹重編，CFLAGS+=-fprofile-use=$PD -fprofile-correction
 #          -Wno-missing-profile -fprofile-partial-training → strip 出最終包
 # profile 與兩份 pass conf 都放 /tmp，不污染倉庫樹；訓練只收集不判死。
-# 緊急旁路：NO_PGO=1 跳過 PGO 單包重試（僅炸包時用，同 v2.25 單包降級慣例）。
+# 用戶鐵律：六最無豁免——PGO 全量強制，任何包都不許 NO_PGO 旁路或無 PGO 降級。
+# 構建失敗即 exit 1 暴露問題，源頭修好再過，不靜默降旗標。
 gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
   local pass=$1 out=$2 pd=$3 extra cf cxf ld lto
   cf=$(set +u; . /etc/makepkg.conf; printf '%s' "${CFLAGS:-}")
@@ -96,7 +97,7 @@ gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
 #        -nostdlib 鏈接必炸），libc.so.6 等主體全量插樁 → 主體被 PGO 優化。
 # python：PKGBUILD 廢除 --enable-optimizations（雙重插樁 _freeze_module abort），
 #        外層兩段式 PGO 全權負責，訓練用 CPython 官方 PGO 負載（-m test --pgo）。
-if [ -z "${NO_PGO:-}" ]; then
+if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   PD="/tmp/pgo-data-$name"; MKCONF_BAK="/tmp/makepkg.conf.bak-$name"
   cp /etc/makepkg.conf "$MKCONF_BAK"
   rm -rf "$PD" "$pdir/src" "$pdir/pkg"; mkdir -p "$PD"
@@ -120,53 +121,23 @@ if [ -z "${NO_PGO:-}" ]; then
   echo "PGO 訓練：$name"
   su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
   find "$PD" -name 'conftest.gcda' -delete 2>/dev/null || true
+  # 六最無豁免：訓練後必須有真實 .gcda,否則 pass2 的 -fprofile-use 等於沒 PGO。
+  # 以往靜默繼續＝出無 profile 包,現在直接紅,迫使訓練負載被修好。
+  _gcda=$(find "$PD" -name '*.gcda' 2>/dev/null | wc -l)
+  if [ "$_gcda" -eq 0 ]; then
+    cp "$MKCONF_BAK" /etc/makepkg.conf
+    echo "::error::$name PGO 訓練零 .gcda（六最無豁免，不出無 profile 包；請修 ci/pgo-train.sh 訓練負載）"
+    exit 1
+  fi
+  echo "PGO 訓練收到 $_gcda 個 .gcda：$name"
   rm -rf "$pdir/src" "$pdir/pkg"
   printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
   if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
     cp "$MKCONF_BAK" /etc/makepkg.conf
-    # 診斷：run 43627019385 實測 pass2 死在 configure 編譯器自檢
-    # （cannot compute suffix of executables），本地系統 gcc 無法重現 →
-    # 懷疑容器 /usr/local/bin 自編 gcc 不認 pass2 某旗標。印出關鍵證據。
-    echo "═══ PGO pass2 診斷：$name ═══"
-    gcc --version | head -1
-    echo 'int main(){return 0;}' > /tmp/wb-conftest.c
-    for probe in "-fprofile-use=$PD -fprofile-correction -Wno-missing-profile -fprofile-partial-training" \
-                 "-fprofile-use=$PD -Wno-missing-profile"; do
-      if gcc $probe /tmp/wb-conftest.c -o /tmp/wb-conftest 2>/tmp/wb-probe.err; then
-        echo "probe OK: $probe"
-      else
-        echo "probe FAIL: $probe"; head -3 /tmp/wb-probe.err
-      fi
-    done
-    tail -20 "$pdir/src"/*/config.log 2>/dev/null | head -20
-    # config.log 尾段只有 confdefs.h，gcc 真實報錯在「cannot compute suffix」
-    # 之前的測試命令區塊；抓出來看真正死因。
-    for cfglog in "$pdir/src"/*/config.log; do
-      [ -f "$cfglog" ] || continue
-      grep -B25 'cannot compute suffix' "$cfglog" 2>/dev/null | tail -35 && break
-    done
-    # 二級降級：只留 -fprofile-use（去掉 -fprofile-correction / -fprofile-partial-training）
-    # 重試前必須清 srcdir/pkg：makepkg 不重新解壓已存在的 srcdir，補丁
-    # 「already exists」會讓 prepare() 先炸，重試根本走不到 build()
-    # （run 43631404963 coreutils 實測）。
-    rm -rf "$pdir/src" "$pdir/pkg"
-    echo "PGO pass2 重試（精簡旗標）：$name"
-    printf '\n# v2.26 PGO pass2 retry\nCFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nCXXFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\nLDFLAGS+=" -fprofile-use=%s -Wno-missing-profile"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
-    if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
-      cp "$MKCONF_BAK" /etc/makepkg.conf
-      echo "═══ PGO-FALLBACK：$name pass2 兩種旗標都炸，改出無 PGO 最終包（大聲標記，非靜默）═══"
-      rm -rf "$pdir/src" "$pdir/pkg"
-      su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck" \
-        || { echo "構建失敗（含 fallback）：$name"; exit 1; }
-      echo "PGO-FALLBACK-USED：$name"
-    fi
-    cp "$MKCONF_BAK" /etc/makepkg.conf
-  else
-    cp "$MKCONF_BAK" /etc/makepkg.conf
+    echo "::error::PGO pass2 失敗：$name（六最無豁免，不降級出無 PGO 包；請修源頭）"
+    exit 1
   fi
-else
-  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --nocheck" \
-    || { echo "構建失敗：$name"; exit 1; }
+  cp "$MKCONF_BAK" /etc/makepkg.conf
 fi
 echo "OK：$name $(ls "$pdir"/*.pkg.tar.zst 2>/dev/null | tail -1)"
