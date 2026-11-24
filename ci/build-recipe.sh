@@ -156,11 +156,27 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
         echo "  probe FAIL: $probe"; head -5 /tmp/wb-probe.err
       fi
     done
-    echo "  --- config.log 尾部 ---"
-    tail -25 "$pdir"/src/*/config.log 2>/dev/null | head -25
+    # 32 位 probe：acl 等雙節包 build32 用 CC="gcc -m32"，
+    # 64 位 probe OK 不代表 32 位連結也 OK（libgcov i386 缺失會炸）。
+    for probe in "-m32 -fprofile-use=$PD -fprofile-correction -Wno-missing-profile -fprofile-partial-training" \
+                 "-m32 -fprofile-use=$PD -Wno-missing-profile"; do
+      if gcc $probe /tmp/wb-conftest.c -o /tmp/wb-conftest32 2>/tmp/wb-probe32.err; then
+        echo "  probe32 OK: $probe"
+      else
+        echo "  probe32 FAIL: $probe"; head -5 /tmp/wb-probe32.err
+      fi
+    done
+    echo "  --- config.log 位置（find 遞迴，makepkg 可能清過頂層）---"
+    find "$pdir"/src -name config.log -type f 2>/dev/null | head -5
+    echo "  --- config.log 尾部（所有找到的）---"
+    find "$pdir"/src -name config.log -type f 2>/dev/null | while read -r cl; do
+      echo "    [$cl]"; tail -30 "$cl" 2>/dev/null | head -30
+    done
     echo "  --- 殘留 gcda 路徑样本（前 20）---"
     find "$PD" -name '*.gcda' 2>/dev/null | head -20
     echo "  gcda 總數: $(find "$PD" -name '*.gcda' 2>/dev/null | wc -l)"
+    echo "  conftest 相關殘留（gcno+gcda）:"
+    find "$PD" -iname '*conftest*' 2>/dev/null | head -20
     cp "$MKCONF_BAK" /etc/makepkg.conf
     echo "::error::PGO pass2 失敗：$name（六最無豁免，不降級出無 PGO 包；請修源頭）"
     exit 1
