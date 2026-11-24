@@ -141,6 +141,26 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
   if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
+    # 2026-11-24 恢復診斷（只診斷、不降級——用戶鐵律六最無豁免）：
+    # v2.30 把 9cf1308 的 probe/config.log 診斷一起删了，21 個 autotools 包
+    # pass2「cannot compute suffix of executables」失敗時毫無真因可言。
+    # 這裡在紅燈前把 gcc probe、config.log 尾部、殘留 gcda 路徑樣本打出來，
+    # 便於一次重跑就定位（不改降級行為，仍舊 exit 1）。
+    echo "═══ PGO pass2 診斷：$name ═══"
+    printf 'int main(void){return 0;}\n' > /tmp/wb-conftest.c
+    for probe in "-fprofile-use=$PD -fprofile-correction -Wno-missing-profile -fprofile-partial-training" \
+                 "-fprofile-use=$PD -Wno-missing-profile"; do
+      if gcc $probe /tmp/wb-conftest.c -o /tmp/wb-conftest 2>/tmp/wb-probe.err; then
+        echo "  probe OK: $probe"
+      else
+        echo "  probe FAIL: $probe"; head -5 /tmp/wb-probe.err
+      fi
+    done
+    echo "  --- config.log 尾部 ---"
+    tail -25 "$pdir"/src/*/config.log 2>/dev/null | head -25
+    echo "  --- 殘留 gcda 路徑样本（前 20）---"
+    find "$PD" -name '*.gcda' 2>/dev/null | head -20
+    echo "  gcda 總數: $(find "$PD" -name '*.gcda' 2>/dev/null | wc -l)"
     cp "$MKCONF_BAK" /etc/makepkg.conf
     echo "::error::PGO pass2 失敗：$name（六最無豁免，不降級出無 PGO 包；請修源頭）"
     exit 1
