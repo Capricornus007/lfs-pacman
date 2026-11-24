@@ -28,10 +28,16 @@ find src -maxdepth 5 -name Makefile 2>/dev/null | sort | while read -r mk; do
 done
 
 # 2) 冒煙：每個 ELF 執行檔跑 --help／--version（20 秒硬上限各）
-find pkg -type f 2>/dev/null | sort | while read -r f; do
-  file -b "$f" 2>/dev/null | grep -q 'ELF.*executable' || continue
-  timeout 20 "$f" --help    >/dev/null 2>&1 || true
-  timeout 20 "$f" --version >/dev/null 2>&1 || true
+# 除了安裝後的 pkg/，也跑 src/ —— libssh2/autoconf 等套件的 check 目標是
+# shell 腳本、pkg/ 只有 .so／sh 腳本，只冒煙 pkg/ 會零 .gcda（repo
+# shard3 #87 / lfs-pacman #111 實測）。src/ 下套件自己編的 ELF 執行檔
+# （tests/、build tool 等）才是插樁過、能寫 gcda 的訓練標的。
+for tree in pkg src; do
+  find "$tree" -type f -perm -u+x 2>/dev/null | sort | while read -r f; do
+    file -b "$f" 2>/dev/null | grep -q 'ELF.*executable' || continue
+    timeout 20 "$f" --help    >/dev/null 2>&1 || true
+    timeout 20 "$f" --version >/dev/null 2>&1 || true
+  done
 done
 
 echo "train: 收到 $(find "$pd" -name '*.gcda' 2>/dev/null | wc -l) 個 .gcda"
