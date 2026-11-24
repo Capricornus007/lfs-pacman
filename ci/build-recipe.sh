@@ -117,10 +117,14 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   # configure conftest 路徑與 pass1 完全相同 → -fprofile-use 讀到 checksum
   # 不匹配的殘留 profile，configure 自檢「cannot compute suffix of executables」
   # 直接炸。真實來源的 .gcda 保留，只清 conftest 產物。
-  find "$PD" -name 'conftest.gcda' -delete 2>/dev/null || true
+  # 2026-11-24 udev-standalone 實測：autotools 的 conftest profile 不只有
+  # 精確的 conftest.gcda，還有 configure 各子測試的 conftest-<n>.gcda 等變體；
+  # 只刪精確名會讓 pass2 的 configure 讀到 checksum 不符的殘留，照樣炸
+  # 「cannot compute suffix of executables」。改成 conftest*.gcda 通配全清。
+  find "$PD" -name 'conftest*.gcda' -delete 2>/dev/null || true
   echo "PGO 訓練：$name"
   su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
-  find "$PD" -name 'conftest.gcda' -delete 2>/dev/null || true
+  find "$PD" -name 'conftest*.gcda' -delete 2>/dev/null || true
   # 六最無豁免：訓練後必須有真實 .gcda,否則 pass2 的 -fprofile-use 等於沒 PGO。
   # 以往靜默繼續＝出無 profile 包,現在直接紅,迫使訓練負載被修好。
   _gcda=$(find "$PD" -name '*.gcda' 2>/dev/null | wc -l)
@@ -131,6 +135,9 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   fi
   echo "PGO 訓練收到 $_gcda 個 .gcda：$name"
   rm -rf "$pdir/src" "$pdir/pkg"
+  # pass2 清樹重解後 configure 會重寫 conftest profile；再清一次通配，
+  # 避免任何訓練階段留下的 conftest 變體被 -fprofile-use 讀到（udev 實測）。
+  find "$PD" -name 'conftest*.gcda' -delete 2>/dev/null || true
   printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
   if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
