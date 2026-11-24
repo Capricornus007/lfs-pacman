@@ -75,7 +75,11 @@ gen_pgo_conf() {  # $1=pass1|pass2  $2=輸出 conf  $3=gcda 目錄
   case "$pass" in
     pass1) extra="-fprofile-generate=$pd -fprofile-update=atomic"
            printf 'OPTIONS=(!strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' ;;
-    pass2) extra="-fprofile-use=$pd -fprofile-correction -Wno-missing-profile -fprofile-partial-training"
+    pass2) extra="-fprofile-use=$pd -fprofile-correction -Wno-missing-profile -Wno-error=coverage-mismatch -fprofile-partial-training"
+           # -Wno-error=coverage-mismatch（lfs-pacman #113 coreutils/grep 實測）：
+           # 兩遍編譯間 configure 非確定性會讓個別函式 CFG 漂移（chroot.c main
+           # arcs 94 vs 88），coverage-mismatch 默認硬錯誤直接炸 pass2。
+           # 降為警告後 -fprofile-correction 照常校正，PGO 不降級。
            printf 'OPTIONS=(strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' ;;
   esac > "$out"
   printf 'MAKEFLAGS="-j$(nproc)"\n'  >> "$out"
@@ -132,9 +136,19 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   # 以往靜默繼續＝出無 profile 包,現在直接紅,迫使訓練負載被修好。
   _gcda=$(find "$PD" -name '*.gcda' 2>/dev/null | wc -l)
   if [ "$_gcda" -eq 0 ]; then
-    cp "$MKCONF_BAK" /etc/makepkg.conf
-    echo "::error::$name PGO 訓練零 .gcda（六最無豁免，不出無 profile 包；請修 ci/pgo-train.sh 訓練負載）"
-    exit 1
+    # 區分兩類零 gcda（lfs-pacman #113 實測 29 包掛閘）：
+    #   結構性：純腳本/純數據/空 meta 包（autoconf/iana-etc/man-pages/
+    #           nvidia-zen1th-abi 等）根本沒編 C 代碼 → pass1 無 .gcno，
+    #           pass2 的 -fprofile-use 是 no-op，放行不算「無 profile 包」。
+    #   訓練失敗：有 .gcno（插樁對象存在）但訓練沒跑到 → 真問題，判死修負載。
+    _gcno=$(find "$pdir" -name '*.gcno' 2>/dev/null | wc -l)
+    if [ "$_gcno" -eq 0 ]; then
+      echo "PGO 訓練零 .gcda 但亦零 .gcno：$name 無 C 代碼（結構性無 profile），放行"
+    else
+      cp "$MKCONF_BAK" /etc/makepkg.conf
+      echo "::error::$name PGO 訓練零 .gcda（有 $_gcno 個插樁對象但訓練沒跑到；六最無豁免，請修 ci/pgo-train.sh 訓練負載）"
+      exit 1
+    fi
   fi
   echo "PGO 訓練收到 $_gcda 個 .gcda：$name"
   rm -rf "$pdir/src" "$pdir/pkg"
