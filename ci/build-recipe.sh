@@ -112,19 +112,22 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && updpkgsums && makepkg -fs --noconfirm --nodeps --noarchive --nocheck" \
     || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass1 失敗：$name"; exit 1; }
   cp "$MKCONF_BAK" /etc/makepkg.conf
-  # conftest.gcda 污染（run 43631404963 coreutils／run 43627019385 attr 實測）：
-  # pass1 configure 每個測試程式都寫 $PD/<來源路徑>#conftest.gcda，pass2 的
-  # configure conftest 路徑與 pass1 完全相同 → -fprofile-use 讀到 checksum
-  # 不匹配的殘留 profile，configure 自檢「cannot compute suffix of executables」
-  # 直接炸。真實來源的 .gcda 保留，只清 conftest 產物。
-  # 2026-11-24 udev-standalone 實測：autotools 的 conftest profile 不只有
-  # 精確的 conftest.gcda，還有 configure 各子測試的 conftest-<n>.gcda 等變體；
-  # 只刪精確名會讓 pass2 的 configure 讀到 checksum 不符的殘留，照樣炸
-  # 「cannot compute suffix of executables」。改成 conftest*.gcda 通配全清。
-  find "$PD" -name 'conftest*.gcda' -delete 2>/dev/null || true
+  # conftest.gcda 污染（run 45380396175 acl 實測，2026-11-24 本機 gcc 16.2 復現確認）：
+  # pass1 configure 把每個 conftest 測試的 profile 寫成
+  #   $PD/#<來源絕對路徑以 # 分隔>#conftest.gcda
+  # ——注意 basename 以 '#' 開頭，不是 'conftest'！所以舊的
+  #   find -name 'conftest*.gcda'（含 d5b6a6f 的「通配」）從來沒匹配到任何檔案，
+  #   清理形同虛設（實測：清理前後 PD 裡 conftest.gcda 都在）。
+  # pass2 的 -fprofile-use 讀到 pass1 殘留 profile，而 configure 每個檢查的
+  # conftest.c 控制流都不同 → gcc 報 -Werror=coverage-mismatch
+  # （number of counters in profile data for function 'main' does not match），
+  # configure 因此判定「cannot compute suffix of executables」失敗。
+  # 正確萬用卡是 '*conftest*.gcda'（前綴也要有 *）才會清掉 #...#conftest.gcda；
+  # 真實來源 .gcda 不含 'conftest' 字樣、完整保留 → pass2 PGO 不降級、不豁免。
+  find "$PD" -name '*conftest*.gcda' -delete 2>/dev/null || true
   echo "PGO 訓練：$name"
   su builder -c "cd '$pdir' && bash '$root/ci/pgo-train.sh' '$pdir' '$PD'" || true
-  find "$PD" -name 'conftest*.gcda' -delete 2>/dev/null || true
+  find "$PD" -name '*conftest*.gcda' -delete 2>/dev/null || true
   # 六最無豁免：訓練後必須有真實 .gcda,否則 pass2 的 -fprofile-use 等於沒 PGO。
   # 以往靜默繼續＝出無 profile 包,現在直接紅,迫使訓練負載被修好。
   _gcda=$(find "$PD" -name '*.gcda' 2>/dev/null | wc -l)
@@ -136,8 +139,9 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   echo "PGO 訓練收到 $_gcda 個 .gcda：$name"
   rm -rf "$pdir/src" "$pdir/pkg"
   # pass2 清樹重解後 configure 會重寫 conftest profile；再清一次通配，
-  # 避免任何訓練階段留下的 conftest 變體被 -fprofile-use 讀到（udev 實測）。
-  find "$PD" -name 'conftest*.gcda' -delete 2>/dev/null || true
+  # 避免任何訓練階段留下的 conftest 變體被 -fprofile-use 讀到。
+  # 同樣用 '*conftest*.gcda'（前綴要有 *），否则 #...#conftest.gcda 清不掉。
+  find "$PD" -name '*conftest*.gcda' -delete 2>/dev/null || true
   printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
   if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
