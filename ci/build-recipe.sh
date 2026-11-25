@@ -113,10 +113,12 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   # 報 undefined reference to __gcov_*（run #51 dhcpcd 實測）。
   printf '\n# v2.26 PGO pass1\nCFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nCXXFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nLDFLAGS+=" -fprofile-generate=%s -fprofile-update=atomic"\nOPTIONS=(!strip docs !libtool staticlibs emptydirs zipman purge !debug lto)\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass1（插樁編譯）：$name"
-  # updpkgsums 僅對有 source 陣列的 PKGBUILD 有意義；nvidia-zen1th-abi 等
+  # updpkgsums 僅對「非空」source 陣列的 PKGBUILD 有意義；nvidia-zen1th-abi 等
   # 無 source 的本地 meta/ABI 包（run #117 實錘「PKGBUILD does not contain
   # sources to update」）直接跳過，不能讓它炸掉整個 pass1。
-  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && { if grep -qE '^[[:space:]]*source[0-9]*=' PKGBUILD; then updpkgsums; fi; } && makepkg -fs --noconfirm --nodeps --noarchive --nocheck" \
+  # run #118 教訓：只 grep「有 source= 行」不夠——meta 包寫的是空陣列
+  # `source=()`，照樣匹配、updpkgsums 照樣炸。要連空陣列一起排除。
+  su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && { if grep -qE '^[[:space:]]*source[0-9]*=' PKGBUILD && ! grep -qE '^[[:space:]]*source[0-9]*=[[:space:]]*\\([[:space:]]*\\)' PKGBUILD; then updpkgsums; fi; } && makepkg -fs --noconfirm --nodeps --noarchive --nocheck" \
     || { cp "$MKCONF_BAK" /etc/makepkg.conf; echo "PGO pass1 失敗：$name"; exit 1; }
   cp "$MKCONF_BAK" /etc/makepkg.conf
   # conftest.gcda 污染（run 45380396175 acl 實測，2026-11-24 本機 gcc 16.2 復現確認）：
