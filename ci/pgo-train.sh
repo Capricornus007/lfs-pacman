@@ -21,7 +21,7 @@ fi
 
 # 1) 限時 make check（部分 profile 勝過沒有；-k 忽略單項測試失敗）
 find src -maxdepth 5 -name Makefile 2>/dev/null | sort | while read -r mk; do
-  grep -qE '^check[:( ]' "$mk" 2>/dev/null || continue
+  grep -qE '^(check|test)[:( ]' "$mk" 2>/dev/null || continue
   d=$(dirname "$mk")
   echo "train: make check @ ${d#src/}（≤15 分鐘）"
   ( cd "$d" && timeout 900 make check -k >/dev/null 2>&1 ) || true
