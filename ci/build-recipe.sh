@@ -156,7 +156,7 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
   # 避免任何訓練階段留下的 conftest 變體被 -fprofile-use 讀到。
   # 同樣用 '*conftest*.gcda'（前綴要有 *），否则 #...#conftest.gcda 清不掉。
   find "$PD" -name '*conftest*.gcda' -delete 2>/dev/null || true
-  printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
+  printf '\n# v2.26 PGO pass2\nCFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-error=coverage-mismatch -Wno-missing-profile -fprofile-partial-training"\nCXXFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-error=coverage-mismatch -Wno-missing-profile -fprofile-partial-training"\nLDFLAGS+=" -fprofile-use=%s -fprofile-correction -Wno-error=coverage-mismatch -Wno-missing-profile -fprofile-partial-training"\n' "$PD" "$PD" "$PD" >> /etc/makepkg.conf
   echo "PGO pass2（套用 profile）：$name"
   if ! su builder -c "export PATH=/usr/local/bin:\$PATH; cd '$pdir' && makepkg -fs --noconfirm --nodeps --nocheck"; then
     # 2026-11-24 恢復診斷（只診斷、不降級——用戶鐵律六最無豁免）：
@@ -166,7 +166,7 @@ if true; then  # v2.30：PGO 無條件全量（無 NO_PGO 旁路）
     # 便於一次重跑就定位（不改降級行為，仍舊 exit 1）。
     echo "═══ PGO pass2 診斷：$name ═══"
     printf 'int main(void){return 0;}\n' > /tmp/wb-conftest.c
-    for probe in "-fprofile-use=$PD -fprofile-correction -Wno-missing-profile -fprofile-partial-training" \
+    for probe in "-fprofile-use=$PD -fprofile-correction -Wno-error=coverage-mismatch -Wno-missing-profile -fprofile-partial-training" \
                  "-fprofile-use=$PD -Wno-missing-profile"; do
       if gcc $probe /tmp/wb-conftest.c -o /tmp/wb-conftest 2>/tmp/wb-probe.err; then
         echo "  probe OK: $probe"
