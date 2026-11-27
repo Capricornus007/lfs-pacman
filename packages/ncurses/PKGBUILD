@@ -14,8 +14,11 @@ source=(${pkgname}-${pkgver}.tar.gz)
 md5sums=('dd45bf6854430af403452a7a6a40652c')
 
 prepare() {
-    # makepkg/bsdtar 剝掉與 tarball 同名的頂層目錄時，重建 ${pkgname}-${pkgver} 結構
-    if [ ! -d "${pkgname}-${pkgver}" ]; then
+    # makepkg/bsdtar 可能剝掉與 tarball 同名的頂層目錄；無條件保證 configure 在 ${pkgname}-${pkgver}/ 裡。
+    # run 45977429737 實錘：ncurses-6.6/ 目錄存在（updpkgsums 的 makepkg -g 先建了空殼），
+    # 但 configure 還在 srcdir 根，舊的「目錄存在就跳過」判斷讓 build() cd 進去後 ./configure 找不到。
+    if [ ! -f "${pkgname}-${pkgver}/configure" ]; then
+        rm -rf "${pkgname}-${pkgver}"
         mkdir -p "${pkgname}-${pkgver}"
         for f in "${srcdir}"/*; do
             b=$(basename "$f")
